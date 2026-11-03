@@ -1,7 +1,7 @@
 export const site = {
   name: "Spamlyze",
   url: "https://spamlyze.com",
-  contactEmail: "hello@bynice.com",
+  contactEmail: "hello@spamlyze.com",
   legalEntity: "Eva Gandoin",
   legal: {
     status: "Sole proprietorship (Entrepreneur individuel, micro-entreprise), France",

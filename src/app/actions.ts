@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
+import { addToBrevoWaitlist } from "@/lib/brevo";
 import { db } from "@/lib/firebase-admin";
 
 export type WaitlistState = {
@@ -62,6 +63,8 @@ export async function joinWaitlist(
       message: "Something went wrong on our side. Please try again in a minute.",
     };
   }
+
+  await addToBrevoWaitlist(email);
 
   return {
     status: "success",

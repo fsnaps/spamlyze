@@ -34,11 +34,14 @@ export function Footer() {
     <footer className="mt-auto border-t border-line">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p>
-          © 2026 {site.legalEntity}. Not affiliated with Google.
+          © 2026 {site.name}. Not affiliated with Google.
         </p>
         <nav className="flex gap-5">
           <Link href="/privacy" className="hover:text-foreground">
             Privacy
+          </Link>
+          <Link href="/legal" className="hover:text-foreground">
+            Legal notice
           </Link>
           <Link href="/terms" className="hover:text-foreground">
             Terms

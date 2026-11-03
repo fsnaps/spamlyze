@@ -29,5 +29,5 @@ App Hosting gives the backend's service account access to Firestore in the same 
 
 ## Before launch
 
-- Set the legal entity in `src/lib/site.ts`.
-- Make sure `hello@spamlyze.com` receives mail (e.g. Cloudflare Email Routing).
+- Legal entity and contact email live in `src/lib/site.ts`.
+- Make sure `hello@bynice.com` receives mail.

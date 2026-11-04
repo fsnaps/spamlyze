@@ -10,7 +10,7 @@ runConfig:
 env:
   # Brevo list that receives waitlist signups (Contacts → Lists → ID).
   - variable: BREVO_WAITLIST_LIST_ID
-    value: "0" # TODO(fs): replace with the list ID
+    value: "18"
     availability:
       - RUNTIME
   # Set with: npx firebase-tools apphosting:secrets:set BREVO_API_KEY --project spamlyze

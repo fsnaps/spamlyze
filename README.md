@@ -23,6 +23,17 @@ Without credentials the page still renders; joining the waitlist shows an error.
 
 App Hosting gives the backend's service account access to Firestore in the same project, so no secret is needed for the waitlist.
 
+## Brevo
+
+Waitlist signups are also added to a Brevo list (Firestore remains the source of truth; a Brevo error never blocks a signup).
+
+1. In Brevo, create the list "Spamlyze waitlist".
+2. Put the list ID in `apphosting.yaml` (`BREVO_WAITLIST_LIST_ID`).
+3. `npx firebase-tools apphosting:secrets:set BREVO_API_KEY --project spamlyze` and accept granting access to the `spamlyze` backend.
+4. Welcome email: a Brevo automation triggered by "contact added to list".
+
+The secret must exist before this config is deployed, or the App Hosting rollout fails.
+
 ## Data
 
 - `waitlist/{sha256(email)}`: `email`, `site` (optional domain), `source` (`hero` or `footer`), `createdAt`.

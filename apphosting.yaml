@@ -18,3 +18,30 @@ env:
     secret: BREVO_API_KEY
     availability:
       - RUNTIME
+  # Quick Check (free plan)
+  - variable: CLAUDE_MODEL
+    value: "claude-haiku-5-5"
+    availability:
+      - RUNTIME
+  - variable: QUICK_CHECK_PER_IP_DAILY
+    value: "3"
+    availability:
+      - RUNTIME
+  - variable: QUICK_CHECK_GLOBAL_DAILY
+    value: "200"
+    availability:
+      - RUNTIME
+  - variable: ANTHROPIC_API_KEY
+    secret: ANTHROPIC_API_KEY
+    availability:
+      - RUNTIME
+  # reCAPTCHA v3 keys from https://www.google.com/recaptcha/admin (domain: spamlyze.com)
+  - variable: NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+    value: "6LckWBkuAAAAAEs-4yFZN6LqDRKvA1aWOch_Lp7f"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: RECAPTCHA_SECRET_KEY
+    secret: RECAPTCHA_SECRET_KEY
+    availability:
+      - RUNTIME

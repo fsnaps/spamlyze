@@ -1,3 +1,4 @@
+import { QuickCheckForm } from "@/components/quick-check-form";
 import { WaitlistForm } from "@/components/waitlist-form";
 
 const signals = [
@@ -59,8 +60,8 @@ const faqs = [
     a: "No. Spamlyze is an independent tool based on Google's public spam policies.",
   },
   {
-    q: "When does it launch?",
-    a: "Early access opens soon. Join the list and you'll be among the first to run the free check.",
+    q: "When is the Deep Report available?",
+    a: "Soon. The free check works today. Join the early access list and you'll be the first to get the Deep Report.",
   },
 ];
 
@@ -69,7 +70,7 @@ export default function Home() {
     <main className="flex-1">
       <section className="mx-auto w-full max-w-5xl px-4 pb-20 pt-12 sm:px-6 sm:pt-20">
         <p className="mb-5 inline-flex rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted">
-          Early access · Free spam risk check
+          Free spam risk check · No sign-up
         </p>
         <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
           Will the next spam update hit your site?
@@ -78,8 +79,8 @@ export default function Home() {
           Spamlyze scans your site for the patterns Google&apos;s spam policies target and
           tells you what to fix first. Check before the update, or diagnose after a drop.
         </p>
-        <div id="early-access" className="mt-10 max-w-3xl scroll-mt-8">
-          <WaitlistForm source="hero" />
+        <div className="mt-10 max-w-3xl">
+          <QuickCheckForm />
         </div>
       </section>
 
@@ -122,7 +123,7 @@ export default function Home() {
               <li>Your URL is all we need</li>
               <li>Spam risk score across 6 signals</li>
               <li>Top 3 issues with example pages</li>
-              <li>Optional Search Console check</li>
+              <li>Results in about 30 seconds</li>
             </ul>
           </div>
           <div className="rounded-2xl border-2 border-accent bg-surface p-8">
@@ -154,9 +155,11 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6">
-        <h2 className="text-3xl font-semibold tracking-tight">Be first to run the free check</h2>
-        <p className="mt-3 text-muted">One email when early access opens. No spam, obviously.</p>
+      <section id="early-access" className="mx-auto w-full max-w-3xl scroll-mt-8 px-4 py-20 text-center sm:px-6">
+        <h2 className="text-3xl font-semibold tracking-tight">Get the Deep Report first</h2>
+        <p className="mt-3 text-muted">
+          One email when it launches, and a heads-up when a new spam update rolls out. No spam, obviously.
+        </p>
         <div className="mt-8 text-left">
           <WaitlistForm source="footer" />
         </div>

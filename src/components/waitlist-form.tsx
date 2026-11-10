@@ -5,7 +5,7 @@ import { joinWaitlist, type WaitlistState } from "@/app/actions";
 
 const initialState: WaitlistState = { status: "idle", message: "" };
 
-export function WaitlistForm({ source }: { source: string }) {
+export function WaitlistForm({ source, site }: { source: string; site?: string }) {
   const [state, formAction, pending] = useActionState(joinWaitlist, initialState);
 
   if (state.status === "success") {
@@ -41,17 +41,23 @@ export function WaitlistForm({ source }: { source: string }) {
           autoComplete="email"
           className="h-12 w-full min-w-0 sm:flex-1 rounded-xl border border-line bg-surface px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
         />
-        <label className="sr-only" htmlFor={`site-${source}`}>
-          Your website (optional)
-        </label>
-        <input
-          id={`site-${source}`}
-          name="site"
-          type="text"
-          inputMode="url"
-          placeholder="yoursite.com (optional)"
-          className="h-12 w-full min-w-0 sm:flex-1 rounded-xl border border-line bg-surface px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
-        />
+        {site ? (
+          <input type="hidden" name="site" value={site} />
+        ) : (
+          <>
+            <label className="sr-only" htmlFor={`site-${source}`}>
+              Your website (optional)
+            </label>
+            <input
+              id={`site-${source}`}
+              name="site"
+              type="text"
+              inputMode="url"
+              placeholder="yoursite.com (optional)"
+              className="h-12 w-full min-w-0 sm:flex-1 rounded-xl border border-line bg-surface px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+            />
+          </>
+        )}
         <button
           type="submit"
           disabled={pending}

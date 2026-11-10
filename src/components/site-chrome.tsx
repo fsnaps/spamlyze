@@ -19,12 +19,12 @@ export function Header() {
   return (
     <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-5 sm:px-6">
       <Logo />
-      <a
-        href="#early-access"
+      <Link
+        href="/#early-access"
         className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:border-accent"
       >
         Early access
-      </a>
+      </Link>
     </header>
   );
 }

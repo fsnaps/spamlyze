@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getCheck } from "@/lib/check/run";
+import { ScoreGauge } from "@/components/score-gauge";
+import { WaitlistForm } from "@/components/waitlist-form";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -78,22 +79,26 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
         </p>
       ) : (
         <>
-          <section className="mt-8 flex flex-col gap-6 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center">
+          <section className="sl-fade-up mt-8 flex flex-col gap-6 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center">
             <div className="shrink-0 text-center sm:w-40">
-              <p className="text-6xl font-semibold tabular-nums">{a.riskScore}</p>
-              <p className="mt-1 text-sm text-muted">risk score / 100</p>
+              <ScoreGauge score={a.riskScore} level={a.riskLevel} />
+              <p className="-mt-3 text-sm text-muted">risk score</p>
               <div className="mt-2">
                 <LevelBadge level={a.riskLevel} />
               </div>
             </div>
-            <p className="leading-relaxed">{a.summary}</p>
+            <p className="sl-fade-up leading-relaxed [animation-delay:300ms]">{a.summary}</p>
           </section>
 
           <section className="mt-12">
             <h2 className="text-2xl font-semibold tracking-tight">Top 3 things to fix</h2>
             <ol className="mt-6 space-y-4">
               {a.topIssues.map((t, i) => (
-                <li key={t.title} className="rounded-2xl border border-line bg-surface p-6">
+                <li
+                  key={t.title}
+                  className="sl-fade-up rounded-2xl border border-line bg-surface p-6"
+                  style={{ animationDelay: `${500 + i * 120}ms` }}
+                >
                   <h3 className="font-semibold">
                     {i + 1}. {t.title}
                   </h3>
@@ -111,8 +116,12 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
           <section className="mt-12">
             <h2 className="text-2xl font-semibold tracking-tight">Spam signals</h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {a.signals.map((s) => (
-                <div key={s.id} className="rounded-2xl border border-line bg-surface p-6">
+              {a.signals.map((s, i) => (
+                <div
+                  key={s.id}
+                  className="sl-fade-up rounded-2xl border border-line bg-surface p-6"
+                  style={{ animationDelay: `${900 + i * 90}ms` }}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="font-semibold">{SIGNAL_LABELS[s.id] ?? s.id}</h3>
                     <LevelBadge level={s.level} />
@@ -139,11 +148,12 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
           The Deep Report analyzes up to 500 pages one by one and lines up your Search Console data with
-          update dates. Join the early access list to get it first.
+          update dates. Leave your email to get it first, and we&apos;ll warn you when the next spam update
+          rolls out.
         </p>
-        <Link href="/#early-access" className="mt-4 inline-block rounded-xl bg-accent px-5 py-2.5 font-semibold text-white hover:bg-accent-strong">
-          Get early access
-        </Link>
+        <div className="mt-5">
+          <WaitlistForm source="report" site={check.domain} />
+        </div>
       </section>
 
       <p className="mt-8 text-xs text-muted">

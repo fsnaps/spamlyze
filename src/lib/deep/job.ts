@@ -7,6 +7,7 @@ import { FetchBlockedError } from "@/lib/check/safe-fetch";
 import { computeMetrics } from "@/lib/check/metrics";
 import { stripe } from "@/lib/stripe";
 import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./analyze";
+import { sendDeepReady, sendDeepStarted } from "./emails";
 import type { DeepPage, DeepReport } from "./types";
 
 export const MAX_PAGES = 500;
@@ -57,19 +58,23 @@ export async function getDeepPages(id: string): Promise<DeepPage[]> {
 export async function confirmPayment(id: string, sessionId: string): Promise<boolean> {
   const session = await stripe().checkout.sessions.retrieve(sessionId);
   if (session.metadata?.deepId !== id || session.payment_status !== "paid") return false;
-  await db().runTransaction(async (tx) => {
+  const email = session.customer_details?.email ?? null;
+  const started = await db().runTransaction(async (tx) => {
     const ref = reports().doc(id);
     const snap = await tx.get(ref);
-    if (!snap.exists || snap.get("status") !== "awaiting_payment") return;
+    if (!snap.exists || snap.get("status") !== "awaiting_payment") return null;
     tx.update(ref, {
       status: "running",
       phase: "discover",
       paidAt: FieldValue.serverTimestamp(),
       stripeSessionId: session.id,
-      email: session.customer_details?.email ?? null,
+      email,
       failures: 0,
     });
+    return snap.get("domain") as string;
   });
+  // Only the call that started the job sends the email.
+  if (started && email) await sendDeepStarted(email, id, started);
   return true;
 }
 
@@ -93,6 +98,10 @@ export async function runStep(id: string): Promise<DeepReport | null> {
   try {
     const patch = await PHASES[report.phase](id, report);
     await ref.update({ ...patch, leaseUntil: 0, error: FieldValue.delete() });
+    if (patch.status === "done" && report.email) {
+      const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
+      await sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel);
+    }
   } catch (err) {
     const userFacing = err instanceof CrawlError || err instanceof FetchBlockedError;
     const message = err instanceof Error ? err.message : "Unexpected error";

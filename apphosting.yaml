@@ -50,9 +50,9 @@ env:
     secret: RECAPTCHA_SECRET_KEY
     availability:
       - RUNTIME
-  # Deep Report (paid). Keep "false" until live Stripe keys are in place; /deep/try works either way.
+  # Deep Report (paid). "true" shows the checkout on the homepage and under Quick Checks.
   - variable: DEEP_REPORT_ENABLED
-    value: "false"
+    value: "true"
     availability:
       - BUILD
       - RUNTIME
@@ -68,5 +68,11 @@ env:
   # Set with: npx firebase-tools apphosting:secrets:set STRIPE_SECRET_KEY --project spamlyze
   - variable: STRIPE_SECRET_KEY
     secret: STRIPE_SECRET_KEY
+    availability:
+      - RUNTIME
+  # Signing secret of the Stripe webhook endpoint https://spamlyze.com/api/stripe/webhook
+  # Set with: npx firebase-tools apphosting:secrets:set STRIPE_WEBHOOK_SECRET --project spamlyze
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_WEBHOOK_SECRET
     availability:
       - RUNTIME

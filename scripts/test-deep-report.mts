@@ -12,6 +12,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) {
 }
 process.env.GOOGLE_CLOUD_PROJECT ??= "demo-spamlyze";
 process.env.ANTHROPIC_API_KEY ??= "test-key";
+process.env.BREVO_API_KEY = "test-brevo";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (dns as any).lookup = async () => [{ address: "93.184.215.14", family: 4 }];
@@ -75,8 +76,14 @@ function claudeReply(body: { system: string; messages: { content: string }[] }) 
   });
 }
 
+const emails: { to: string; subject: string; html: string }[] = [];
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = input instanceof Request ? input.url : input.toString();
+  if (url === "https://api.brevo.com/v3/smtp/email") {
+    const b = JSON.parse(String(init?.body));
+    emails.push({ to: b.to[0].email, subject: b.subject, html: b.htmlContent });
+    return Response.json({ messageId: "x" }, { status: 201 });
+  }
   if (url.startsWith("https://api.anthropic.com/")) {
     const body = input instanceof Request ? await input.text() : String(init?.body);
     return claudeReply(JSON.parse(body));
@@ -100,7 +107,7 @@ async function startPaid(url: string) {
   assert.equal((await getDeepReport(id))!.status, "awaiting_payment");
   // Steps do nothing until the payment is confirmed.
   assert.equal((await runStep(id))!.phase, "discover");
-  await db().collection("deepReports").doc(id).update({ status: "running" }); // what confirmPayment does
+  await db().collection("deepReports").doc(id).update({ status: "running", email: "buyer@example.com" }); // what confirmPayment does
   return id;
 }
 
@@ -123,6 +130,12 @@ assert.equal(r.analysis!.signals.length, 5, "one entry per signal");
 assert.deepEqual(r.analysis!.actions[0].affectedUrls, ["https://shop.test/coupons/code-1"], "invented URLs dropped");
 assert.ok(r.usage!.input > 0);
 
+assert.equal(emails.length, 1, "one 'ready' email");
+assert.equal(emails[0].to, "buyer@example.com");
+assert.match(emails[0].subject, /ready/);
+assert.ok(emails[0].html.includes(`/deep/${id}`), "email links to the report");
+if (process.env.EMAIL_PREVIEW) (await import("node:fs")).writeFileSync(process.env.EMAIL_PREVIEW, emails[0].html);
+
 const pages = await getDeepPages(id);
 assert.equal(pages.length, 71);
 assert.equal(pages.filter((p) => p.verdict?.quality === "spammy").length, 20);
@@ -133,6 +146,7 @@ const down = await startPaid("https://down.test/");
 const d = (await runStep(down))!;
 assert.equal(d.status, "failed");
 assert.match(d.error!, /HTTP 500/);
+assert.equal(emails.length, 1, "no 'ready' email for a failed report");
 
 console.log("all deep report tests passed", { steps: claudeCalls.length, usage: r.usage });
 process.exit(0);

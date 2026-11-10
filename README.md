@@ -34,9 +34,27 @@ Waitlist signups are also added to a Brevo list (Firestore remains the source of
 
 The secret must exist before this config is deployed, or the App Hosting rollout fails.
 
+## Quick Check (free plan)
+
+`/check` crawls up to 15 pages (homepage + a spread sample of the sitemap, honouring robots.txt), computes metrics (thin pages, duplicates, outbound links, risky terms) and asks Claude (`CLAUDE_MODEL`, default `claude-haiku-5-5`) for a risk score, one verdict per spam signal and the top 3 issues. The report lives at `/report/{id}`.
+
+Protections: SSRF guard on every fetch and redirect (public IPs, ports 80/443 only, 1.5 MB cap), reCAPTCHA v3 (score ≥ 0.5, fails closed in production when not configured), `QUICK_CHECK_PER_IP_DAILY` checks per IP per day, `QUICK_CHECK_GLOBAL_DAILY` checks per day overall, and a 24-hour cache per domain (re-checking a domain is free). Also set a monthly spend limit in the Anthropic Console.
+
+Setup:
+
+1. Create reCAPTCHA v3 keys at https://www.google.com/recaptcha/admin for `spamlyze.com`; put the site key in `apphosting.yaml` (`NEXT_PUBLIC_RECAPTCHA_SITE_KEY`).
+2. `npx firebase-tools apphosting:secrets:set RECAPTCHA_SECRET_KEY --project spamlyze`
+3. `npx firebase-tools apphosting:secrets:set ANTHROPIC_API_KEY --project spamlyze`
+4. Optional: a Firestore TTL policy on `rateLimits.expiresAt` to clean up counters.
+
+Tests: `npm test` (offline: SSRF guards, robots.txt, sitemap sampling, metrics).
+
 ## Data
 
 - `waitlist/{sha256(email)}`: `email`, `site` (optional domain), `source` (`hero` or `footer`), `createdAt`.
+- `checks/{id}`: `domain`, `url`, `createdAt`, `pagesAnalyzed`, `robotsBlocked`, `metrics`, `analysis`, `model`, `usage`.
+- `checkCache/{domain}`: latest `checkId` and `createdAt` (24-hour reuse).
+- `rateLimits/{ip_<hash>_<day>|global_<day>}`: `count`, `expiresAt`.
 
 ## Before launch
 

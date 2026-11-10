@@ -30,8 +30,8 @@ export default function PrivacyPage() {
             profile picture.
           </li>
           <li>
-            <strong>Sites you analyze:</strong> the URL you submit and the public pages we crawl
-            from it.
+            <strong>Sites you analyze:</strong> the URL you submit, the public pages we crawl
+            from it, and the report we generate. Reports are reachable by anyone who has their link.
           </li>
           <li>
             <strong>Google Search Console data</strong> (only if you connect it): the list of
@@ -43,7 +43,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Technical data:</strong> server logs (IP address, browser type, pages
-            requested) kept for security and debugging.
+            requested) kept for security and debugging. To limit abuse of the free check, we store a
+            salted hash of your IP address for 48 hours, never the address itself.
           </li>
         </ul>
 
@@ -93,6 +94,7 @@ export default function PrivacyPage() {
           <li>Google Cloud and Firebase (hosting, database, authentication, storage)</li>
           <li>Anthropic (AI analysis of page content)</li>
           <li>Stripe (payments)</li>
+          <li>Google reCAPTCHA (bot protection on the free check, under Google&apos;s own privacy policy)</li>
           <li>Our email provider (waitlist and account emails)</li>
         </ul>
         <p>We share data with these providers only as needed to run {site.name}.</p>

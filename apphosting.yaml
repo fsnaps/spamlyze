@@ -14,6 +14,11 @@ env:
     availability:
       - RUNTIME
   # Set with: npx firebase-tools apphosting:secrets:set BREVO_API_KEY --project spamlyze
+  # Brevo list for Monitoring (subscription) interest.
+  - variable: BREVO_MONITORING_LIST_ID
+    value: "19"
+    availability:
+      - RUNTIME
   - variable: BREVO_API_KEY
     secret: BREVO_API_KEY
     availability:
@@ -43,5 +48,25 @@ env:
       - RUNTIME
   - variable: RECAPTCHA_SECRET_KEY
     secret: RECAPTCHA_SECRET_KEY
+    availability:
+      - RUNTIME
+  # Deep Report (paid). Keep "false" until live Stripe keys are in place; /deep/try works either way.
+  - variable: DEEP_REPORT_ENABLED
+    value: "false"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: DEEP_REPORT_PRICE_CENTS
+    value: "4900"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: DEEP_REPORT_MODEL
+    value: "claude-opus-5-5"
+    availability:
+      - RUNTIME
+  # Set with: npx firebase-tools apphosting:secrets:set STRIPE_SECRET_KEY --project spamlyze
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
     availability:
       - RUNTIME

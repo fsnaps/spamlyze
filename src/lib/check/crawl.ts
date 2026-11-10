@@ -85,12 +85,19 @@ function locs(xml: string): string[] {
   return [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) => m[1]);
 }
 
-async function readSitemaps(candidates: string[], origin: string): Promise<string[] | null> {
+type SitemapLimits = { maxFiles: number; maxUrls: number; childrenPerIndex: number };
+export const QUICK_LIMITS: SitemapLimits = { maxFiles: 6, maxUrls: MAX_SITEMAP_URLS, childrenPerIndex: 4 };
+
+async function readSitemaps(
+  candidates: string[],
+  origin: string,
+  limits: SitemapLimits = QUICK_LIMITS,
+): Promise<string[] | null> {
   const urls = new Set<string>();
   let found = false;
   const queue = [...new Set(candidates)].slice(0, 3);
   let fetched = 0;
-  while (queue.length && fetched < 6 && urls.size < MAX_SITEMAP_URLS) {
+  while (queue.length && fetched < limits.maxFiles && urls.size < limits.maxUrls) {
     const sm = queue.shift()!;
     fetched++;
     try {
@@ -100,13 +107,13 @@ async function readSitemaps(candidates: string[], origin: string): Promise<strin
       const entries = locs(res.body);
       if (/<sitemapindex/i.test(res.body)) {
         // Prefer post/page sitemaps; take a few children.
-        queue.push(...entries.slice(0, 4));
+        queue.push(...entries.slice(0, limits.childrenPerIndex));
       } else {
         for (const u of entries) {
           try {
             if (new URL(u).origin === origin) urls.add(u);
           } catch {}
-          if (urls.size >= MAX_SITEMAP_URLS) break;
+          if (urls.size >= limits.maxUrls) break;
         }
       }
     } catch {}
@@ -168,13 +175,13 @@ function internalLinksFrom(html: string, pageUrl: string, origin: string): strin
 }
 
 /** Spread picks across the list so we see different sections, not just the first posts. */
-function spreadSample<T>(items: T[], n: number): T[] {
+export function spreadSample<T>(items: T[], n: number): T[] {
   if (items.length <= n) return items;
   const step = items.length / n;
   return Array.from({ length: n }, (_, i) => items[Math.floor(i * step)]);
 }
 
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = [];
   let i = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -191,7 +198,18 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 
 export class CrawlError extends Error {}
 
-export async function crawl(start: URL): Promise<CrawlResult> {
+export type SiteDiscovery = {
+  origin: string;
+  homepage: PageData;
+  robotsBlocked: boolean;
+  sitemapUrlCount: number | null;
+  sitemapUrls: string[];
+  /** Crawlable URLs other than the homepage: sitemap URLs, or homepage links when there is no sitemap. */
+  pool: string[];
+};
+
+/** Loads the homepage, robots.txt and sitemaps. Throws CrawlError or FetchBlockedError. */
+export async function discoverSite(start: URL, limits: SitemapLimits = QUICK_LIMITS): Promise<SiteDiscovery> {
   let home;
   try {
     home = await safeFetch(start, 10000);
@@ -213,35 +231,56 @@ export async function crawl(start: URL): Promise<CrawlResult> {
 
   const homepage = extract(home.url, home.status, home.body, origin);
   if (robotsBlocked) {
-    return { origin, homepage, pages: [], sitemapUrlCount: null, sitemapSample: [], robotsBlocked };
+    return { origin, homepage, robotsBlocked, sitemapUrlCount: null, sitemapUrls: [], pool: [] };
   }
 
   const sitemapUrls = await readSitemaps(
     rules.sitemaps.length ? rules.sitemaps : [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`],
     origin,
+    limits,
   );
 
   const pool = (sitemapUrls && sitemapUrls.length > 0 ? sitemapUrls : internalLinksFrom(home.body, home.url, origin))
     .filter((u) => u !== home.url && u !== `${origin}/`)
     .filter((u) => robotsAllows(rules, new URL(u).pathname));
 
-  const picks = spreadSample(pool, SAMPLE_SIZE - 1);
-  const fetched = await mapLimit(picks, 5, async (u) => {
-    try {
-      const res = await safeFetch(u, 6000);
-      if (res.status >= 400 || !/html/i.test(res.contentType)) return null;
-      return extract(res.url, res.status, res.body, origin);
-    } catch {
-      return null;
-    }
-  });
+  return {
+    origin,
+    homepage,
+    robotsBlocked,
+    sitemapUrlCount: sitemapUrls ? sitemapUrls.length : null,
+    sitemapUrls: sitemapUrls ?? [],
+    pool,
+  };
+}
+
+/** Fetches one page and extracts its data, or null when it isn't a reachable HTML page. */
+export async function fetchPageData(url: string, origin: string, timeoutMs = 6000): Promise<PageData | null> {
+  try {
+    const res = await safeFetch(url, timeoutMs);
+    if (res.status >= 400 || !/html/i.test(res.contentType)) return null;
+    return extract(res.url, res.status, res.body, origin);
+  } catch {
+    return null;
+  }
+}
+
+export async function crawl(start: URL): Promise<CrawlResult> {
+  const site = await discoverSite(start);
+  const { origin, homepage, robotsBlocked } = site;
+  if (robotsBlocked) {
+    return { origin, homepage, pages: [], sitemapUrlCount: null, sitemapSample: [], robotsBlocked };
+  }
+
+  const picks = spreadSample(site.pool, SAMPLE_SIZE - 1);
+  const fetched = await mapLimit(picks, 5, (u) => fetchPageData(u, origin));
 
   return {
     origin,
     homepage,
     pages: fetched.filter((p): p is PageData => p !== null),
-    sitemapUrlCount: sitemapUrls ? sitemapUrls.length : null,
-    sitemapSample: spreadSample(sitemapUrls ?? [], 200).map((u) => new URL(u).pathname),
+    sitemapUrlCount: site.sitemapUrlCount,
+    sitemapSample: spreadSample(site.sitemapUrls, 200).map((u) => new URL(u).pathname),
     robotsBlocked,
   };
 }

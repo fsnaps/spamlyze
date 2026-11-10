@@ -5,7 +5,17 @@ import { joinWaitlist, type WaitlistState } from "@/app/actions";
 
 const initialState: WaitlistState = { status: "idle", message: "" };
 
-export function WaitlistForm({ source, site }: { source: string; site?: string }) {
+export function WaitlistForm({
+  source,
+  site,
+  compact = false,
+  cta = "Get early access",
+}: {
+  source: string;
+  site?: string;
+  compact?: boolean;
+  cta?: string;
+}) {
   const [state, formAction, pending] = useActionState(joinWaitlist, initialState);
 
   if (state.status === "success") {
@@ -28,7 +38,7 @@ export function WaitlistForm({ source, site }: { source: string; site?: string }
           <input type="text" name="company" tabIndex={-1} autoComplete="off" />
         </label>
       </div>
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className={compact ? "flex flex-col gap-3" : "flex flex-col gap-3 sm:flex-row"}>
         <label className="sr-only" htmlFor={`email-${source}`}>
           Email
         </label>
@@ -39,10 +49,10 @@ export function WaitlistForm({ source, site }: { source: string; site?: string }
           required
           placeholder="you@company.com"
           autoComplete="email"
-          className="h-12 w-full min-w-0 sm:flex-1 rounded-xl border border-line bg-surface px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+          className={`h-12 w-full min-w-0 rounded-xl border border-line bg-surface px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 ${compact ? "" : "sm:flex-1"}`}
         />
-        {site ? (
-          <input type="hidden" name="site" value={site} />
+        {site || compact ? (
+          <input type="hidden" name="site" value={site ?? ""} />
         ) : (
           <>
             <label className="sr-only" htmlFor={`site-${source}`}>
@@ -63,7 +73,7 @@ export function WaitlistForm({ source, site }: { source: string; site?: string }
           disabled={pending}
           className="h-12 shrink-0 rounded-xl bg-accent px-6 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
         >
-          {pending ? "Joining…" : "Get early access"}
+          {pending ? "Joining…" : cta}
         </button>
       </div>
       <p aria-live="polite" className="min-h-5 text-sm text-red-600 dark:text-red-400">

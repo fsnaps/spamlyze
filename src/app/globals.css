@@ -58,3 +58,81 @@ body {
   color: var(--accent);
   text-decoration: underline;
 }
+
+/* Quick Check animations */
+@keyframes sl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sl-ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes sl-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sl-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes sl-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.sl-sweep {
+  animation: sl-spin 2.4s linear infinite;
+  transform-origin: center;
+}
+.sl-ping {
+  animation: sl-ping 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  transform-origin: center;
+}
+.sl-fade-up {
+  animation: sl-fade-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.sl-shimmer {
+  background: linear-gradient(90deg, var(--foreground) 40%, var(--muted) 50%, var(--foreground) 60%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sl-shimmer 2.2s linear infinite;
+}
+.sl-check path {
+  stroke-dasharray: 24;
+  animation: sl-draw 0.4s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-sweep,
+  .sl-ping,
+  .sl-fade-up,
+  .sl-shimmer,
+  .sl-check path {
+    animation: none;
+  }
+  .sl-shimmer {
+    color: var(--foreground);
+  }
+}

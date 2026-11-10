@@ -1,10 +1,13 @@
 import "server-only";
 
-// Adds a contact to the Brevo waitlist list. Firestore stays the source of truth:
-// a Brevo failure is logged and never blocks the signup.
-export async function addToBrevoWaitlist(email: string): Promise<void> {
+// Adds a contact to a Brevo list: the waitlist, or the Monitoring interest list when
+// it is configured. Firestore stays the source of truth: a Brevo failure is logged
+// and never blocks the signup.
+export async function addToBrevoWaitlist(email: string, list: "waitlist" | "monitoring" = "waitlist"): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY;
-  const listId = Number(process.env.BREVO_WAITLIST_LIST_ID);
+  const listId = Number(
+    (list === "monitoring" && process.env.BREVO_MONITORING_LIST_ID) || process.env.BREVO_WAITLIST_LIST_ID,
+  );
   if (!apiKey || !Number.isInteger(listId) || listId <= 0) return;
 
   try {

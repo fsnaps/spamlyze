@@ -52,6 +52,7 @@ export async function joinWaitlist(
           email,
           ...(site ? { site } : {}),
           source,
+          interests: FieldValue.arrayUnion(source === "monitoring" ? "monitoring" : "deep_report"),
           createdAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -64,10 +65,13 @@ export async function joinWaitlist(
     };
   }
 
-  await addToBrevoWaitlist(email);
+  await addToBrevoWaitlist(email, source === "monitoring" ? "monitoring" : "waitlist");
 
   return {
     status: "success",
-    message: "You're on the list. We'll email you when early access opens.",
+    message:
+      source === "monitoring"
+        ? "Thanks! We'll email you as soon as Monitoring opens."
+        : "You're on the list. We'll email you when it launches.",
   };
 }

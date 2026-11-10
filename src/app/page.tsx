@@ -1,4 +1,6 @@
+import { DeepCheckout } from "@/components/deep-checkout";
 import { QuickCheckForm } from "@/components/quick-check-form";
+import { deepReportEnabled, deepReportPrice } from "@/lib/deep/config";
 import { WaitlistForm } from "@/components/waitlist-form";
 
 const signals = [
@@ -113,10 +115,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6">
+      <section id="deep-report" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 sm:px-6">
         <h2 className="text-3xl font-semibold tracking-tight">Plans</h2>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-surface p-8">
+        <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          <div className="flex flex-col rounded-2xl border border-line bg-surface p-8">
             <h3 className="text-xl font-semibold">Quick Check</h3>
             <p className="mt-1 text-3xl font-semibold">Free</p>
             <ul className="mt-6 space-y-2 text-muted">
@@ -126,17 +128,39 @@ export default function Home() {
               <li>Results in about 30 seconds</li>
             </ul>
           </div>
-          <div className="rounded-2xl border-2 border-accent bg-surface p-8">
+          <div className="flex flex-col rounded-2xl border-2 border-accent bg-surface p-8">
             <h3 className="text-xl font-semibold">Deep Report</h3>
             <p className="mt-1 text-3xl font-semibold">
-              One-time <span className="text-base font-normal text-muted">· price at launch</span>
+              {deepReportPrice()} <span className="text-base font-normal text-muted">· one-time</span>
             </p>
             <ul className="mt-6 space-y-2 text-muted">
               <li>Up to 500 pages analyzed one by one</li>
-              <li>Search Console data lined up with update dates</li>
-              <li>Prioritized action plan</li>
-              <li>PDF export to share with your team or client</li>
+              <li>Risk score and findings for every spam policy</li>
+              <li>Prioritized action plan with the pages to fix</li>
+              <li>Full refund if we can&apos;t analyze your site</li>
             </ul>
+            <div className="mt-auto pt-8">
+              {deepReportEnabled() ? (
+                <DeepCheckout price={deepReportPrice()} />
+              ) : (
+                <WaitlistForm source="deep_report" compact cta="Notify me at launch" />
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col rounded-2xl border border-dashed border-line bg-surface p-8">
+            <h3 className="text-xl font-semibold">Monitoring</h3>
+            <p className="mt-1 text-3xl font-semibold">
+              Soon <span className="text-base font-normal text-muted">· monthly</span>
+            </p>
+            <ul className="mt-6 space-y-2 text-muted">
+              <li>Your site re-checked on a schedule</li>
+              <li>New and changed pages analyzed</li>
+              <li>History to see what improved or slipped</li>
+              <li>Alert when a spam update rolls out</li>
+            </ul>
+            <div className="mt-auto pt-8">
+              <WaitlistForm source="monitoring" compact cta="I'm interested" />
+            </div>
           </div>
         </div>
       </section>

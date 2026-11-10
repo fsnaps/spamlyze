@@ -136,3 +136,13 @@ body {
     color: var(--foreground);
   }
 }
+
+@media print {
+  body > header,
+  body > footer {
+    display: none;
+  }
+  .sl-fade-up {
+    animation: none;
+  }
+}

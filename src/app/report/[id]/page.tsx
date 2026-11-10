@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getCheck } from "@/lib/check/run";
 import { ScoreGauge } from "@/components/score-gauge";
 import { WaitlistForm } from "@/components/waitlist-form";
+import { DeepCheckout } from "@/components/deep-checkout";
+import { deepReportEnabled, deepReportPrice } from "@/lib/deep/config";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -136,7 +138,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
                   <LevelBadge level="unknown" />
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-muted">
-                  Needs Search Console. Coming with the Deep Report.
+                  Needs Search Console. Coming soon.
                 </p>
               </div>
             </div>
@@ -147,13 +149,24 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
       <section className="mt-12 rounded-2xl border-2 border-accent bg-surface p-6">
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
-          The Deep Report analyzes up to 500 pages one by one and lines up your Search Console data with
-          update dates. Leave your email to get it first, and we&apos;ll warn you when the next spam update
-          rolls out.
+          This check looked at {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one by one and
+          gives you a prioritized action plan with the exact pages to fix.
         </p>
-        <div className="mt-5">
-          <WaitlistForm source="report" site={check.domain} />
+        <div className="mt-5 max-w-md">
+          {deepReportEnabled() ? (
+            <DeepCheckout url={check.url} price={deepReportPrice()} />
+          ) : (
+            <WaitlistForm source="report" site={check.domain} cta="Notify me at launch" />
+          )}
         </div>
+        {deepReportEnabled() && (
+          <div className="mt-4 border-t border-line pt-5">
+            <p className="text-sm text-muted">Not now? Get a heads-up when the next spam update rolls out.</p>
+            <div className="mt-3">
+              <WaitlistForm source="report" site={check.domain} cta="Keep me posted" />
+            </div>
+          </div>
+        )}
       </section>
 
       <p className="mt-8 text-xs text-muted">

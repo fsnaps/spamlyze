@@ -11,7 +11,7 @@ const STEPS = [
 ];
 const STEP_MS = 6500;
 
-function Radar({ host }: { host: string }) {
+export function Radar({ host }: { host: string }) {
   return (
     <div className="relative mx-auto aspect-square w-44 sm:w-52">
       <span className="sl-ping absolute inset-6 rounded-full border border-accent/40" />
@@ -39,7 +39,7 @@ function Radar({ host }: { host: string }) {
   );
 }
 
-function StepIcon({ state }: { state: "done" | "active" | "todo" }) {
+export function StepIcon({ state }: { state: "done" | "active" | "todo" }) {
   if (state === "done")
     return (
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white">

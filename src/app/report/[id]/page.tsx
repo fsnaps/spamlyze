@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getCheck } from "@/lib/check/run";
 import { ScoreGauge } from "@/components/score-gauge";
+import { WaitlistForm } from "@/components/waitlist-form";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -148,11 +148,12 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
           The Deep Report analyzes up to 500 pages one by one and lines up your Search Console data with
-          update dates. Join the early access list to get it first.
+          update dates. Leave your email to get it first, and we&apos;ll warn you when the next spam update
+          rolls out.
         </p>
-        <Link href="/#early-access" className="mt-4 inline-block rounded-xl bg-accent px-5 py-2.5 font-semibold text-white hover:bg-accent-strong">
-          Get early access
-        </Link>
+        <div className="mt-5">
+          <WaitlistForm source="report" site={check.domain} />
+        </div>
       </section>
 
       <p className="mt-8 text-xs text-muted">

@@ -9,5 +9,5 @@ export const site = {
     siret: "10623331500014",
     publisher: "Eva Gandoin",
   },
-  policyUpdated: "November 3, 2026",
+  policyUpdated: "November 11, 2026",
 };

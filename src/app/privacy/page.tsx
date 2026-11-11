@@ -95,6 +95,7 @@ export default function PrivacyPage() {
           <li>Anthropic (AI analysis of page content)</li>
           <li>Stripe (payments)</li>
           <li>Google reCAPTCHA (bot protection on the free check, under Google&apos;s own privacy policy)</li>
+          <li>Google Analytics (audience measurement, only with your consent)</li>
           <li>Our email provider (waitlist and account emails)</li>
         </ul>
         <p>We share data with these providers only as needed to run {site.name}.</p>
@@ -119,9 +120,19 @@ export default function PrivacyPage() {
           your data protection authority.
         </p>
 
-        <h2>Cookies</h2>
+        <h2 id="cookies">Cookies and analytics</h2>
         <p>
-          We use only the cookies needed to keep you signed in. We do not use advertising cookies.
+          If you accept it in the cookie banner, we use Google Analytics 4 to measure how visitors use
+          {" "}{site.name} (pages viewed, free checks started, checkouts opened). Google Analytics sets
+          {" "}<code>_ga</code> cookies, kept up to 14 months, and Google processes this data as our
+          processor, possibly in the United States under the EU-US Data Privacy Framework. We don&apos;t
+          use advertising features, and we don&apos;t send Google your email address or the sites you check.
+        </p>
+        <p>
+          Nothing is loaded before you accept. You can change your choice at any time with the
+          {" "}&ldquo;Cookies&rdquo; link at the bottom of every page; declining deletes the analytics
+          cookies. Your choice is stored in your browser. Apart from this, we only use what&apos;s
+          needed to run the site, and no advertising cookies.
         </p>
 
         <h2>Changes</h2>

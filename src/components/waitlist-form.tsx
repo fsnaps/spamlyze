@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { joinWaitlist, type WaitlistState } from "@/app/actions";
 
 const initialState: WaitlistState = { status: "idle", message: "" };
@@ -17,6 +18,10 @@ export function WaitlistForm({
   cta?: string;
 }) {
   const [state, formAction, pending] = useActionState(joinWaitlist, initialState);
+
+  useEffect(() => {
+    if (state.status === "success") trackEvent("sign_up", { method: source });
+  }, [state.status, source]);
 
   if (state.status === "success") {
     return (

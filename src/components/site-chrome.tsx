@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CookieSettingsLink } from "./analytics";
 import { site } from "@/lib/site";
 
 export function Logo() {
@@ -49,6 +50,7 @@ export function Footer() {
           <a href={`mailto:${site.contactEmail}`} className="hover:text-foreground">
             Contact
           </a>
+          <CookieSettingsLink />
         </nav>
       </div>
     </footer>

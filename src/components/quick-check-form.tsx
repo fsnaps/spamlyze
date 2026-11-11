@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { ScanProgress } from "./scan-progress";
 
 declare global {
@@ -45,6 +46,7 @@ export function QuickCheckForm() {
         .toLowerCase(),
     );
     setPending(true);
+    trackEvent("quick_check_start");
     try {
       const token = await captchaToken();
       const res = await fetch("/api/check", {
@@ -55,6 +57,7 @@ export function QuickCheckForm() {
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (data.id) {
         setDone(true);
+        trackEvent("quick_check_done");
         router.prefetch(`/report/${data.id}`);
         await new Promise((r) => setTimeout(r, 700));
         router.push(`/report/${data.id}`);

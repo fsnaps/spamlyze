@@ -82,3 +82,9 @@ env:
     secret: ADMIN_PASSWORD
     availability:
       - RUNTIME
+  # Google Analytics 4 (loaded only after cookie consent)
+  - variable: NEXT_PUBLIC_GA_ID
+    value: "G-Y9NXSF3VW0"
+    availability:
+      - BUILD
+      - RUNTIME

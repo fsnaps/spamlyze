@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 
 /** Starts a Stripe Checkout for the Deep Report. With `url`, the site is already known. */
 export function DeepCheckout({ url, price }: { url?: string; price: string }) {
@@ -20,6 +21,7 @@ export function DeepCheckout({ url, price }: { url?: string; price: string }) {
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (data.url) {
+        trackEvent("begin_checkout", { currency: "USD", value: Number(price.replace(/[^0-9.]/g, "")) });
         window.location.href = data.url;
         return;
       }

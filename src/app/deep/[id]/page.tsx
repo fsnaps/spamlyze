@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { DeepRunner } from "@/components/deep-runner";
 import { PrintButton } from "@/components/print-button";
+import { PurchaseTracker } from "@/components/purchase-tracker";
+import { deepReportPrice } from "@/lib/deep/config";
 import { ScoreGauge } from "@/components/score-gauge";
 import { confirmPayment, getDeepPages, getDeepReport, isDeepId } from "@/lib/deep/job";
 import { publicStatus } from "@/lib/deep/status";
@@ -100,6 +102,9 @@ async function DeepView({
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 sm:px-6">
       <p className="text-sm text-muted">Deep Report</p>
       <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{report.domain}</h1>
+      {report.status !== "awaiting_payment" && typeof sessionId === "string" && (
+        <PurchaseTracker id={id} value={Number(deepReportPrice().slice(1))} />
+      )}
       <div className="mt-8">
         {report.status === "awaiting_payment" ? (
           <div className="rounded-3xl border border-line bg-surface p-6 sm:p-8">

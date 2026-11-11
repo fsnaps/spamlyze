@@ -8,6 +8,9 @@ import { computeMetrics } from "@/lib/check/metrics";
 import { stripe } from "@/lib/stripe";
 import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./analyze";
 import { sendDeepReady, sendDeepStarted } from "./emails";
+import { notifyAdmin } from "@/lib/notify";
+import { site } from "@/lib/site";
+import { track } from "@/lib/stats";
 import type { DeepPage, DeepReport } from "./types";
 
 export const MAX_PAGES = 500;
@@ -74,7 +77,19 @@ export async function confirmPayment(id: string, sessionId: string): Promise<boo
     return snap.get("domain") as string;
   });
   // Only the call that started the job sends the email.
-  if (started && email) await sendDeepStarted(email, id, started);
+  if (started) {
+    const amount = session.amount_total ?? 0;
+    await Promise.all([
+      email ? sendDeepStarted(email, id, started) : null,
+      track({ deepPaid: 1, revenueCents: amount }),
+      notifyAdmin(
+        "deep",
+        `Deep Report sold: ${started} · $${(amount / 100).toFixed(2)}`,
+        [`Site: ${started}`, `Buyer: ${email ?? "unknown"}`, `Amount: $${(amount / 100).toFixed(2)} ${session.currency?.toUpperCase() ?? ""}`],
+        `${site.url}/deep/${id}`,
+      ),
+    ]);
+  }
   return true;
 }
 
@@ -98,9 +113,12 @@ export async function runStep(id: string): Promise<DeepReport | null> {
   try {
     const patch = await PHASES[report.phase](id, report);
     await ref.update({ ...patch, leaseUntil: 0, error: FieldValue.delete() });
-    if (patch.status === "done" && report.email) {
+    if (patch.status === "done") {
       const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
-      await sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel);
+      await Promise.all([
+        report.email ? sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel) : null,
+        track({ deepDone: 1 }),
+      ]);
     }
   } catch (err) {
     const userFacing = err instanceof CrawlError || err instanceof FetchBlockedError;
@@ -114,7 +132,13 @@ export async function runStep(id: string): Promise<DeepReport | null> {
       error: userFacing ? message : failed ? "We couldn't finish this report." : "A step failed. Retrying…",
       ...(failed ? { status: "failed" } : {}),
     });
-    if (failed) await refund(id, report);
+    if (failed) {
+      await refund(id, report);
+      await Promise.all([
+        track({ deepFailed: 1 }),
+        notifyAdmin("deep", `Deep Report failed: ${report.domain}`, [`Reason: ${message}`, "The buyer was refunded automatically."], `${site.url}/deep/${id}`),
+      ]);
+    }
   }
   return getDeepReport(id);
 }

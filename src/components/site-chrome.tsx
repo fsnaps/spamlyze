@@ -20,10 +20,10 @@ export function Header() {
     <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-5 sm:px-6">
       <Logo />
       <Link
-        href="/#early-access"
+        href="/#deep-report"
         className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:border-accent"
       >
-        Early access
+        Deep Report
       </Link>
     </header>
   );

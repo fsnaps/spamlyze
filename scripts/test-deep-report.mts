@@ -130,8 +130,8 @@ assert.equal(r.analysis!.signals.length, 5, "one entry per signal");
 assert.deepEqual(r.analysis!.actions[0].affectedUrls, ["https://shop.test/coupons/code-1"], "invented URLs dropped");
 assert.ok(r.usage!.input > 0);
 
-assert.equal(emails.length, 1, "one 'ready' email");
-assert.equal(emails[0].to, "buyer@example.com");
+const buyerEmails = () => emails.filter((e) => e.to === "buyer@example.com");
+assert.equal(buyerEmails().length, 1, "one 'ready' email");
 assert.match(emails[0].subject, /ready/);
 assert.ok(emails[0].html.includes(`/deep/${id}`), "email links to the report");
 if (process.env.EMAIL_PREVIEW) (await import("node:fs")).writeFileSync(process.env.EMAIL_PREVIEW, emails[0].html);
@@ -146,7 +146,19 @@ const down = await startPaid("https://down.test/");
 const d = (await runStep(down))!;
 assert.equal(d.status, "failed");
 assert.match(d.error!, /HTTP 500/);
-assert.equal(emails.length, 1, "no 'ready' email for a failed report");
+assert.equal(buyerEmails().length, 1, "no 'ready' email for a failed report");
+assert.ok(
+  emails.some((e) => e.to === "hello@spamlyze.com" && e.subject.includes("failed: down.test")),
+  "the team is told about failed reports",
+);
+
+// Daily stats
+const { lastDays, apiCostUsd } = await import("../src/lib/stats");
+const [day] = await lastDays(1);
+assert.equal(day.deepDone, 1);
+assert.equal(day.deepFailed, 1);
+assert.equal(day.opusInputTokens, 7000, "token usage counted per call");
+assert.ok(apiCostUsd(day) > 0);
 
 console.log("all deep report tests passed", { steps: claudeCalls.length, usage: r.usage });
 process.exit(0);

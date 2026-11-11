@@ -6,6 +6,9 @@ import { analyze, type Analysis } from "./analyze";
 import { crawl } from "./crawl";
 import { computeMetrics, type Metrics } from "./metrics";
 import { cachedCheck, takeQuota } from "./guard";
+import { notifyAdmin } from "@/lib/notify";
+import { site } from "@/lib/site";
+import { track } from "@/lib/stats";
 
 export type StoredCheck = {
   domain: string;
@@ -22,7 +25,10 @@ export type StoredCheck = {
 export async function runQuickCheck(url: URL, ip: string): Promise<string> {
   const domain = url.hostname.toLowerCase().replace(/^www\./, "");
   const cached = await cachedCheck(domain);
-  if (cached) return cached;
+  if (cached) {
+    await track({ quickChecksCached: 1 });
+    return cached;
+  }
 
   await takeQuota(ip);
 
@@ -46,6 +52,25 @@ export async function runQuickCheck(url: URL, ip: string): Promise<string> {
       usage: ai?.usage ?? null,
     });
   await db().collection("checkCache").doc(domain).set({ checkId: id, createdAt: FieldValue.serverTimestamp() });
+
+  const opus = ai?.model.includes("opus");
+  await Promise.all([
+    track({
+      quickChecks: 1,
+      [opus ? "opusInputTokens" : "haikuInputTokens"]: ai?.usage.input ?? 0,
+      [opus ? "opusOutputTokens" : "haikuOutputTokens"]: ai?.usage.output ?? 0,
+    }),
+    notifyAdmin(
+      "quick_check",
+      `Quick Check: ${domain}${ai ? ` · ${ai.analysis.riskScore}/100` : ""}`,
+      [
+        `Site: ${result.origin}`,
+        ai ? `Risk: ${ai.analysis.riskScore}/100 (${ai.analysis.riskLevel})` : "Blocked by robots.txt",
+        `Pages sampled: ${metrics.pagesAnalyzed}`,
+      ],
+      `${site.url}/report/${id}`,
+    ),
+  ]);
   return id;
 }
 

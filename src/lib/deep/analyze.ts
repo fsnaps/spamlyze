@@ -5,6 +5,7 @@ import { z } from "zod";
 import { SIGNAL_IDS } from "@/lib/check/analyze";
 import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
+import { track } from "@/lib/stats";
 
 export const DEEP_MODEL = () => process.env.DEEP_REPORT_MODEL || "claude-opus-5-5";
 
@@ -82,6 +83,11 @@ async function call<T extends z.ZodType>(
     }
     throw err;
   }
+  const opus = response.model.includes("opus");
+  await track({
+    [opus ? "opusInputTokens" : "haikuInputTokens"]: response.usage.input_tokens,
+    [opus ? "opusOutputTokens" : "haikuOutputTokens"]: response.usage.output_tokens,
+  });
   if (response.stop_reason === "refusal" || !response.parsed_output) {
     console.error("deep: no parsed output", response.stop_reason);
     throw new DeepAnalysisError("The analysis returned no result. We'll retry automatically.");

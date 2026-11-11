@@ -76,3 +76,9 @@ env:
     secret: STRIPE_WEBHOOK_SECRET
     availability:
       - RUNTIME
+  # Password for /admin (any user name). Set with:
+  # npx firebase-tools apphosting:secrets:set ADMIN_PASSWORD --project spamlyze
+  - variable: ADMIN_PASSWORD
+    secret: ADMIN_PASSWORD
+    availability:
+      - RUNTIME

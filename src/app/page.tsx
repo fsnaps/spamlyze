@@ -62,8 +62,8 @@ const faqs = [
     a: "No. Spamlyze is an independent tool based on Google's public spam policies.",
   },
   {
-    q: "When is the Deep Report available?",
-    a: "Soon. The free check works today. Join the early access list and you'll be the first to get the Deep Report.",
+    q: "What's in the Deep Report?",
+    a: "Up to 500 pages reviewed one by one, a risk score for each spam policy, a prioritized action plan with the exact pages to fix, and a PDF export. It's a one-time payment, refunded in full if we can't analyze your site.",
   },
 ];
 
@@ -72,7 +72,7 @@ export default function Home() {
     <main className="flex-1">
       <section className="mx-auto w-full max-w-5xl px-4 pb-20 pt-12 sm:px-6 sm:pt-20">
         <p className="mb-5 inline-flex rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted">
-          Free spam risk check · No sign-up
+          Free spam risk check · Deep Report now available
         </p>
         <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
           Will the next spam update hit your site?
@@ -84,6 +84,12 @@ export default function Home() {
         <div className="mt-10 max-w-3xl">
           <QuickCheckForm />
         </div>
+        <p className="mt-2 text-sm text-muted">
+          Need the full picture?{" "}
+          <a href="#deep-report" className="font-medium text-foreground underline decoration-accent underline-offset-4">
+            Get the Deep Report: 500 pages and an action plan for {deepReportPrice()}
+          </a>
+        </p>
       </section>
 
       <section className="border-y border-line bg-surface">
@@ -180,12 +186,12 @@ export default function Home() {
       </section>
 
       <section id="early-access" className="mx-auto w-full max-w-3xl scroll-mt-8 px-4 py-20 text-center sm:px-6">
-        <h2 className="text-3xl font-semibold tracking-tight">Get the Deep Report first</h2>
+        <h2 className="text-3xl font-semibold tracking-tight">Know when the next spam update hits</h2>
         <p className="mt-3 text-muted">
-          One email when it launches, and a heads-up when a new spam update rolls out. No spam, obviously.
+          One email when Google rolls out a spam update, with what changed and what to check. No spam, obviously.
         </p>
         <div className="mt-8 text-left">
-          <WaitlistForm source="footer" />
+          <WaitlistForm source="footer" cta="Keep me posted" />
         </div>
       </section>
     </main>

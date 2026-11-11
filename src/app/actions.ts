@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { addToBrevoWaitlist } from "@/lib/brevo";
+import { track } from "@/lib/stats";
 import { db } from "@/lib/firebase-admin";
 
 export type WaitlistState = {
@@ -65,13 +66,22 @@ export async function joinWaitlist(
     };
   }
 
-  await addToBrevoWaitlist(email, source === "monitoring" ? "monitoring" : "waitlist");
+  await Promise.all([
+    addToBrevoWaitlist(email, source === "monitoring" ? "monitoring" : "waitlist"),
+    track(
+      source === "monitoring"
+        ? { signupsMonitoring: 1 }
+        : source === "report"
+          ? { signupsReport: 1 }
+          : { signupsWaitlist: 1 },
+    ),
+  ]);
 
   return {
     status: "success",
     message:
       source === "monitoring"
         ? "Thanks! We'll email you as soon as Monitoring opens."
-        : "You're on the list. We'll email you when it launches.",
+        : "You're on the list. We'll email you when the next spam update rolls out.",
   };
 }

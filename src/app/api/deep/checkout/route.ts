@@ -1,6 +1,7 @@
 import { FetchBlockedError, normalizeInputUrl, safeFetch } from "@/lib/check/safe-fetch";
 import { createDeepReport } from "@/lib/deep/job";
 import { site } from "@/lib/site";
+import { track } from "@/lib/stats";
 import { DEEP_REPORT_PRICE_CENTS, stripe } from "@/lib/stripe";
 
 export async function POST(request: Request) {
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       success_url: `${site.url}/deep/${id}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${site.url}/?canceled=1#deep-report`,
     });
+    await track({ deepCheckouts: 1 });
     return Response.json({ url: session.url });
   } catch (err) {
     console.error("deep checkout failed", err instanceof Error ? err.message : err);

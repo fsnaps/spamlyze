@@ -102,7 +102,7 @@ export default function PrivacyPage() {
 
         <h2>Storage and retention</h2>
         <p>
-          Data is stored on Google Cloud. OAuth tokens are encrypted. We keep reports while your
+          Data is stored on Google Cloud. We don&apos;t store your Google OAuth token: it is used once to import your Search Console figures, then revoked. We keep reports while your
           account exists. Raw Search Console data is deleted 30 days after the report it was
           used for; only the aggregated figures shown in your report are kept. Waitlist emails
           are deleted on request or 12 months after launch if you never create an account.

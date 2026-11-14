@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { DeepRunner } from "@/components/deep-runner";
+import { GscSection } from "@/components/gsc-section";
+import { gscEnabled } from "@/lib/gsc/oauth";
 import { PrintButton } from "@/components/print-button";
 import { PurchaseTracker } from "@/components/purchase-tracker";
 import { deepReportPrice } from "@/lib/deep/config";
@@ -84,7 +86,9 @@ async function DeepView({
 }) {
   // Firestore and Stripe clients use random ids: render at request time only.
   await connection();
-  const sessionId = (await searchParams).session_id;
+  const query = await searchParams;
+  const sessionId = query.session_id;
+  const gscResult = typeof query.gsc === "string" ? query.gsc : undefined;
   const { id } = await params;
   if (!isDeepId(id)) notFound();
   let report = await getDeepReport(id);
@@ -118,7 +122,7 @@ async function DeepView({
             </p>
           </div>
         ) : report.status === "done" ? (
-          <FinishedReport id={id} report={report} />
+          <FinishedReport id={id} report={report} gscResult={gscResult} />
         ) : (
           <DeepRunner id={id} host={report.domain} initial={publicStatus(report)} />
         )}
@@ -127,7 +131,7 @@ async function DeepView({
   );
 }
 
-async function FinishedReport({ id, report }: { id: string; report: DeepReport }) {
+async function FinishedReport({ id, report, gscResult }: { id: string; report: DeepReport; gscResult?: string }) {
   const a = report.analysis;
   if (report.robotsBlocked || !a) {
     return (
@@ -252,6 +256,8 @@ async function FinishedReport({ id, report }: { id: string; report: DeepReport }
           </ul>
         </section>
       )}
+
+      <GscSection id={id} gsc={report.gsc} result={gscResult} enabled={gscEnabled()} />
 
       <p className="mt-8 text-xs text-muted">
         This report is an estimate based on public pages. It is not a guarantee, and Spamlyze is not affiliated with

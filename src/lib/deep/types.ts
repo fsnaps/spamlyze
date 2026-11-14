@@ -1,6 +1,7 @@
 import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
 import type { DeepAnalysis, PageVerdict } from "./analyze";
+import type { GscData } from "@/lib/gsc/data";
 
 export type DeepPhase = "discover" | "crawl" | "analyze" | "synthesize" | "done";
 export type DeepStatus = "awaiting_payment" | "running" | "done" | "failed";
@@ -33,6 +34,8 @@ export type DeepReport = {
   refunded?: boolean;
   leaseUntil?: number;
   usage?: { input: number; output: number };
+  /** Search Console figures, imported once when the buyer connects their property. */
+  gsc?: GscData;
 };
 
 /** One crawled page, stored in deepReports/{id}/pages/{index}. */

@@ -66,7 +66,7 @@ async function Dashboard() {
           value={String(t.signupsWaitlist + t.signupsReport)}
           hint={`${t.signupsReport} from reports`}
         />
-        <Tile label="Monitoring interest" value={String(t.signupsMonitoring)} />
+        <Tile label="Monitoring interest" value={String(t.signupsMonitoring)} hint={`${t.gscConnected} Search Console imports`} />
         <Tile label="Cached checks" value={String(t.quickChecksCached)} hint="same domain within 24 h" />
         <Tile
           label="Errors"

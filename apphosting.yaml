@@ -88,3 +88,13 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Google Search Console import (OAuth client "Spamlyze web", redirect https://spamlyze.com/api/gsc/callback)
+  - variable: GOOGLE_OAUTH_CLIENT_ID
+    value: "68146420478-6ncjp5mkbl7mfstsgucs68ksuq92cbmh.apps.googleusercontent.com"
+    availability:
+      - RUNTIME
+  # Set with: npx firebase-tools apphosting:secrets:set GOOGLE_OAUTH_CLIENT_SECRET --project spamlyze
+  - variable: GOOGLE_OAUTH_CLIENT_SECRET
+    secret: GOOGLE_OAUTH_CLIENT_SECRET
+    availability:
+      - RUNTIME

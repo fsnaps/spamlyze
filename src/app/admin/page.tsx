@@ -85,7 +85,7 @@ async function Dashboard() {
         <table className="w-full text-sm tabular-nums">
           <thead className="text-left text-muted">
             <tr>
-              {["Day", "Checks", "Checkouts", "Sold", "Revenue", "API cost", "Signups"].map((h) => (
+              {["Day", "Checks", "GSC", "Checkouts", "Sold", "Revenue", "API cost", "Signups"].map((h) => (
                 <th key={h} className="px-4 py-2 font-medium">
                   {h}
                 </th>
@@ -97,6 +97,7 @@ async function Dashboard() {
               <tr key={d.day}>
                 <td className="px-4 py-2">{d.day}</td>
                 <td className="px-4 py-2">{d.quickChecks ?? 0}</td>
+                <td className="px-4 py-2">{d.gscConnected ?? 0}</td>
                 <td className="px-4 py-2">{d.deepCheckouts ?? 0}</td>
                 <td className="px-4 py-2">{d.deepPaid ?? 0}</td>
                 <td className="px-4 py-2">{usd((d.revenueCents ?? 0) / 100)}</td>
@@ -108,7 +109,7 @@ async function Dashboard() {
             ))}
             {!days.length && (
               <tr>
-                <td className="px-4 py-6 text-muted" colSpan={7}>
+                <td className="px-4 py-6 text-muted" colSpan={8}>
                   No data yet.
                 </td>
               </tr>

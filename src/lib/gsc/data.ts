@@ -20,6 +20,8 @@ export type GscData = {
   daily: DailyPoint[];
   updates: UpdateImpact[];
   losers: { update: string; pages: PageLoss[] } | null;
+  /** How many pages lost clicks around the worst update (shown when the list itself is withheld). */
+  lostPages?: number;
 };
 
 export class GscError extends Error {
@@ -146,6 +148,7 @@ export async function importSearchData(token: string, property: string): Promise
     .filter((u) => u.verdict === "hit" || u.verdict === "possible")
     .sort((a, b) => a.clicksChange - b.clicksChange || (a.kind === "spam" ? -1 : 1))[0];
   let losers: GscData["losers"] = null;
+  let lostPages = 0;
   if (worst) {
     const w = windows(worst, last);
     const byPage = (from: number, to: number) =>
@@ -161,10 +164,10 @@ export async function importSearchData(token: string, property: string): Promise
         after: Math.round(((afterMap.get(r.keys[0]) ?? 0) / afterDays) * WINDOW_DAYS),
       }))
       .filter((p) => p.before - p.after > 0)
-      .sort((a, b) => b.before - b.after - (a.before - a.after))
-      .slice(0, 15);
-    losers = { update: worst.name, pages };
+      .sort((a, b) => b.before - b.after - (a.before - a.after));
+    losers = { update: worst.name, pages: pages.slice(0, 15) };
+    lostPages = pages.length;
   }
 
-  return { property, importedAt: new Date().toISOString(), daily, updates, losers };
+  return { property, importedAt: new Date().toISOString(), daily, updates, losers, lostPages };
 }

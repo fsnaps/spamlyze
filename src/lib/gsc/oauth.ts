@@ -12,22 +12,22 @@ export function sign(value: string) {
   return createHmac("sha256", process.env.GOOGLE_OAUTH_CLIENT_SECRET!).update(value).digest("base64url");
 }
 
-/** State = deepId.nonce.signature. The nonce is also set in a short-lived cookie. */
-export function makeState(deepId: string) {
+/** State = target.nonce.signature. The nonce is also set in a short-lived cookie. */
+export function makeState(target: string) {
   const nonce = randomBytes(16).toString("base64url");
-  const body = `${deepId}.${nonce}`;
+  const body = `${target}.${nonce}`;
   return { state: `${body}.${sign(body)}`, nonce };
 }
 
 export function readState(state: string | null, cookieNonce: string | undefined): string | null {
   const parts = state?.split(".") ?? [];
   if (parts.length !== 3 || !cookieNonce) return null;
-  const [deepId, nonce, sig] = parts;
-  const expected = Buffer.from(sign(`${deepId}.${nonce}`));
+  const [target, nonce, sig] = parts;
+  const expected = Buffer.from(sign(`${target}.${nonce}`));
   const given = Buffer.from(sig);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   if (nonce !== cookieNonce) return null;
-  return deepId;
+  return target;
 }
 
 export function authUrl(state: string, scope = GSC_SCOPE, redirect = redirectUri()) {

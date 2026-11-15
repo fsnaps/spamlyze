@@ -6,6 +6,9 @@ import { ScoreGauge } from "@/components/score-gauge";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { DeepCheckout } from "@/components/deep-checkout";
 import { deepReportEnabled, deepReportPrice } from "@/lib/deep/config";
+import { GscSection } from "@/components/gsc-section";
+import { gscEnabled } from "@/lib/gsc/oauth";
+import { getQuickImport } from "@/lib/gsc/imports";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -50,20 +53,30 @@ function UrlList({ urls }: { urls: string[] }) {
   );
 }
 
-export default function ReportPage({ params }: PageProps<"/report/[id]">) {
+export default function ReportPage({ params, searchParams }: PageProps<"/report/[id]">) {
   return (
     <Suspense
       fallback={<main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 text-muted sm:px-6">Loading report…</main>}
     >
-      <Report params={params} />
+      <Report params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Report({ params }: { params: Promise<{ id: string }> }) {
+async function Report({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
   const check = await getCheck(id);
   if (!check) notFound();
+  const gsc = await getQuickImport(typeof query.g === "string" ? query.g : undefined, id);
+  const gscResult = typeof query.gsc === "string" ? query.gsc : undefined;
+  const deepCta = deepReportEnabled() ? `Get the Deep Report (${deepReportPrice()})` : "Join the Deep Report waitlist";
   const a = check.analysis;
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
@@ -138,15 +151,48 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
                   <LevelBadge level="unknown" />
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-muted">
-                  Needs Search Console. Coming soon.
+                  {gsc ? (
+                    "See your Search Console results below."
+                  ) : gscEnabled() ? (
+                    <>
+                      Needs Search Console.{" "}
+                      <a href="#search-console" className="text-accent underline">
+                        Connect it for free
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    "Needs Search Console. Coming soon."
+                  )}
                 </p>
               </div>
             </div>
           </section>
+
+          <GscSection
+            connectHref={`/api/gsc/connect?check=${id}`}
+            gsc={gsc}
+            result={gscResult}
+            enabled={gscEnabled()}
+            upsell={
+              <>
+                <p className="mt-2 text-muted">
+                  The Deep Report lists them one by one with their clicks before and after, reviews up to 500 pages
+                  and gives you a prioritized action plan.
+                </p>
+                <a
+                  href="#deep-report"
+                  className="mt-4 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
+                >
+                  {deepCta}
+                </a>
+              </>
+            }
+          />
         </>
       )}
 
-      <section className="mt-12 rounded-2xl border-2 border-accent bg-surface p-6">
+      <section id="deep-report" className="mt-12 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
           This check looked at {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one by one and

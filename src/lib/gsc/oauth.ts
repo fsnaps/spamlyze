@@ -8,7 +8,7 @@ export const redirectUri = () => `${process.env.GSC_REDIRECT_BASE ?? site.url}/a
 
 export const gscEnabled = () => Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
 
-function sign(value: string) {
+export function sign(value: string) {
   return createHmac("sha256", process.env.GOOGLE_OAUTH_CLIENT_SECRET!).update(value).digest("base64url");
 }
 
@@ -30,13 +30,13 @@ export function readState(state: string | null, cookieNonce: string | undefined)
   return deepId;
 }
 
-export function authUrl(state: string) {
+export function authUrl(state: string, scope = GSC_SCOPE, redirect = redirectUri()) {
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.search = new URLSearchParams({
     client_id: process.env.GOOGLE_OAUTH_CLIENT_ID!,
-    redirect_uri: redirectUri(),
+    redirect_uri: redirect,
     response_type: "code",
-    scope: GSC_SCOPE,
+    scope,
     // One-time import: no refresh token, nothing to store.
     access_type: "online",
     state,
@@ -45,7 +45,10 @@ export function authUrl(state: string) {
   return u.toString();
 }
 
-export async function exchangeCode(code: string): Promise<{ accessToken: string; scope: string }> {
+export async function exchangeCode(
+  code: string,
+  redirect = redirectUri(),
+): Promise<{ accessToken: string; scope: string; idToken?: string }> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -53,13 +56,13 @@ export async function exchangeCode(code: string): Promise<{ accessToken: string;
       code,
       client_id: process.env.GOOGLE_OAUTH_CLIENT_ID!,
       client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET!,
-      redirect_uri: redirectUri(),
+      redirect_uri: redirect,
       grant_type: "authorization_code",
     }),
   });
-  const json = (await res.json()) as { access_token?: string; scope?: string; error?: string };
+  const json = (await res.json()) as { access_token?: string; scope?: string; id_token?: string; error?: string };
   if (!res.ok || !json.access_token) throw new Error(`token exchange failed: ${json.error ?? res.status}`);
-  return { accessToken: json.access_token, scope: json.scope ?? "" };
+  return { accessToken: json.access_token, scope: json.scope ?? "", idToken: json.id_token };
 }
 
 /** Best effort: the token is short-lived anyway, but we drop it as soon as the import is done. */

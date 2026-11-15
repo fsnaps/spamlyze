@@ -18,7 +18,12 @@ function sum(days: DayStats[]) {
 export default function AdminPage() {
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12 sm:px-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Stats</h1>
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Stats</h1>
+        <a href="/api/admin/logout" className="text-sm text-muted underline">
+          Sign out
+        </a>
+      </div>
       <Suspense fallback={<p className="mt-8 text-muted">Loading…</p>}>
         <Dashboard />
       </Suspense>

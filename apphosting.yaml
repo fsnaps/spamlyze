@@ -76,10 +76,10 @@ env:
     secret: STRIPE_WEBHOOK_SECRET
     availability:
       - RUNTIME
-  # Password for /admin (any user name). Set with:
-  # npx firebase-tools apphosting:secrets:set ADMIN_PASSWORD --project spamlyze
-  - variable: ADMIN_PASSWORD
-    secret: ADMIN_PASSWORD
+  # Google accounts allowed on /admin (comma-separated). Set with:
+  # npx firebase-tools apphosting:secrets:set ADMIN_EMAILS --project spamlyze
+  - variable: ADMIN_EMAILS
+    secret: ADMIN_EMAILS
     availability:
       - RUNTIME
   # Google Analytics 4 (loaded only after cookie consent)

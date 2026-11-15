@@ -1,4 +1,4 @@
-import type { GscData, UpdateImpact } from "@/lib/gsc/data";
+import { fillGaps, type GscData, type UpdateImpact } from "@/lib/gsc/data";
 import { UPDATES } from "@/lib/gsc/updates";
 
 const MESSAGES: Record<string, string> = {
@@ -142,7 +142,8 @@ function GscResults({ gsc, id, enabled }: { gsc: GscData; id: string; enabled: b
 }
 
 /** Daily clicks as a line, with spam updates shaded red and core updates grey. */
-function TrafficChart({ daily }: { daily: GscData["daily"] }) {
+function TrafficChart({ daily: raw }: { daily: GscData["daily"] }) {
+  const daily = fillGaps(raw);
   if (daily.length < 2) return null;
   const W = 800;
   const H = 220;
@@ -176,11 +177,11 @@ function TrafficChart({ daily }: { daily: GscData["daily"] }) {
             <title>{b.name}</title>
           </rect>
         ))}
-        {[0, 0.5, 1].map((f) => (
-          <g key={f}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(max * f)} y2={y(max * f)} className="stroke-line" strokeWidth={1} />
-            <text x={pad.l - 6} y={y(max * f) + 4} textAnchor="end" className="fill-current text-[11px] opacity-60">
-              {Math.round(max * f)}
+        {(max >= 2 ? [0, Math.round(max / 2), max] : [0, max]).map((v) => (
+          <g key={v}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className="stroke-line" strokeWidth={1} />
+            <text x={pad.l - 6} y={y(v) + 4} textAnchor="end" className="fill-current text-[11px] opacity-60">
+              {v}
             </text>
           </g>
         ))}

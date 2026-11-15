@@ -61,6 +61,16 @@ const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 const day = (s: string) => Date.parse(`${s}T00:00:00Z`);
 const DAY = 86_400_000;
 
+/** Search Console omits days with no impressions: put them back as zeros. */
+export function fillGaps(points: DailyPoint[], until?: string): DailyPoint[] {
+  if (!points.length) return points;
+  const byDay = new Map(points.map((p) => [p.d, p]));
+  const out: DailyPoint[] = [];
+  const end = day(until && until > points[points.length - 1].d ? until : points[points.length - 1].d);
+  for (let t = day(points[0].d); t <= end; t += DAY) out.push(byDay.get(iso(t)) ?? { d: iso(t), c: 0, i: 0 });
+  return out;
+}
+
 type Row = { keys: string[]; clicks: number; impressions: number };
 
 async function query(token: string, property: string, body: Record<string, unknown>): Promise<Row[]> {
@@ -107,7 +117,10 @@ export async function importSearchData(token: string, property: string): Promise
     dimensions: ["date"],
     rowLimit: 25_000,
   });
-  const daily = rows.map((r) => ({ d: r.keys[0], c: r.clicks, i: r.impressions })).sort((a, b) => a.d.localeCompare(b.d));
+  const daily = fillGaps(
+    rows.map((r) => ({ d: r.keys[0], c: r.clicks, i: r.impressions })).sort((a, b) => a.d.localeCompare(b.d)),
+    iso(endDate),
+  );
   const first = daily.length ? day(daily[0].d) : endDate;
   const last = daily.length ? day(daily[daily.length - 1].d) : endDate;
 

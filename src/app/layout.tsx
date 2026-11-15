@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s · Spamlyze",
   },
   description:
-    "Find out if your site is exposed to the next spam update. Spamlyze scans for scaled content, thin pages, site reputation abuse and link schemes, then tells you what to fix first.",
+    "Find out if your site is exposed to the next spam update. Spamlyze scans for scaled content, thin pages, site reputation abuse and link schemes, checks your Search Console traffic around every Google update, then tells you what to fix first.",
   openGraph: {
     siteName: site.name,
     type: "website",

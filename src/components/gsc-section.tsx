@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { fillGaps, type GscData, type UpdateImpact } from "@/lib/gsc/data";
 import { UPDATES } from "@/lib/gsc/updates";
 
@@ -19,7 +20,17 @@ const pct = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}%`;
 const fmtDay = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-export function GscSection({ id, gsc, result, enabled }: { id: string; gsc?: GscData; result?: string; enabled: boolean }) {
+type Props = {
+  /** Where "Connect" and "Refresh" send the visitor. */
+  connectHref: string;
+  gsc?: GscData;
+  result?: string;
+  enabled: boolean;
+  /** Shown instead of the list of losing pages when the free plan withholds it. */
+  upsell?: ReactNode;
+};
+
+export function GscSection({ connectHref, gsc, result, enabled, upsell }: Props) {
   if (!gsc && !enabled) return null;
   const message = result ? MESSAGES[result] : null;
   return (
@@ -31,7 +42,7 @@ export function GscSection({ id, gsc, result, enabled }: { id: string; gsc?: Gsc
         </p>
       )}
       {gsc ? (
-        <GscResults gsc={gsc} id={id} enabled={enabled} />
+        <GscResults gsc={gsc} connectHref={connectHref} enabled={enabled} upsell={upsell} />
       ) : (
         <div className="mt-6 rounded-2xl border-2 border-accent bg-surface p-6">
           <p className="leading-relaxed">
@@ -42,25 +53,19 @@ export function GscSection({ id, gsc, result, enabled }: { id: string; gsc?: Gsc
             Read-only access, used once to import 16 months of clicks and impressions for this site. We don&apos;t keep
             access to your account.
           </p>
-          <ConnectButton id={id} label="Connect Search Console" />
+          <a
+            href={connectHref}
+            className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white print:hidden"
+          >
+            Connect Search Console
+          </a>
         </div>
       )}
     </section>
   );
 }
 
-function ConnectButton({ id, label }: { id: string; label: string }) {
-  return (
-    <a
-      href={`/api/gsc/connect?deep=${id}`}
-      className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white print:hidden"
-    >
-      {label}
-    </a>
-  );
-}
-
-function GscResults({ gsc, id, enabled }: { gsc: GscData; id: string; enabled: boolean }) {
+function GscResults({ gsc, connectHref, enabled, upsell }: Omit<Props, "result"> & { gsc: GscData }) {
   const hits = gsc.updates.filter((u) => u.verdict === "hit" || u.verdict === "possible");
   return (
     <>
@@ -129,10 +134,18 @@ function GscResults({ gsc, id, enabled }: { gsc: GscData; id: string; enabled: b
           </ul>
         </div>
       )}
+      {gsc.losers && gsc.losers.pages.length === 0 && (gsc.lostPages ?? 0) > 0 && upsell && (
+        <div className="mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
+          <h3 className="text-lg font-semibold">
+            {gsc.lostPages} {gsc.lostPages === 1 ? "page" : "pages"} lost clicks after the {gsc.losers.update}
+          </h3>
+          {upsell}
+        </div>
+      )}
       {enabled && (
         <p className="mt-4 text-sm text-muted print:hidden">
           Imported {fmtDay(gsc.importedAt.slice(0, 10))}.{" "}
-          <a href={`/api/gsc/connect?deep=${id}`} className="text-accent underline">
+          <a href={connectHref} className="text-accent underline">
             Refresh the data
           </a>
         </p>

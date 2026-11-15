@@ -257,7 +257,7 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
         </section>
       )}
 
-      <GscSection id={id} gsc={report.gsc} result={gscResult} enabled={gscEnabled()} />
+      <GscSection connectHref={`/api/gsc/connect?deep=${id}`} gsc={report.gsc} result={gscResult} enabled={gscEnabled()} />
 
       <p className="mt-8 text-xs text-muted">
         This report is an estimate based on public pages. It is not a guarantee, and Spamlyze is not affiliated with

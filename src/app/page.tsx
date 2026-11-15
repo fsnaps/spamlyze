@@ -26,7 +26,7 @@ const signals = [
   },
   {
     title: "Traffic drops around updates",
-    body: "With Search Console connected, we line up your clicks and impressions with known update dates.",
+    body: "Connect Search Console and we line up 16 months of your clicks with every spam and core update.",
   },
 ];
 
@@ -55,7 +55,11 @@ const faqs = [
   },
   {
     q: "Do I need to connect Search Console?",
-    a: "Not for the free check, which only needs your URL. Connecting Search Console (read-only) lets us confirm the diagnosis with your real traffic data.",
+    a: "No, the free check only needs your URL. Connecting Search Console is optional and free: it shows whether your clicks actually dropped after each Google update. The Deep Report also lists the pages that lost the most clicks.",
+  },
+  {
+    q: "What do you do with my Search Console data?",
+    a: "Access is read-only and used once: we import your daily clicks and impressions for this site, then revoke the access right away. We never keep a token, and we never share or sell your data.",
   },
   {
     q: "Is Spamlyze affiliated with Google?",
@@ -70,16 +74,16 @@ const faqs = [
 export default function Home() {
   return (
     <main className="flex-1">
-      <section className="mx-auto w-full max-w-5xl px-4 pb-20 pt-12 sm:px-6 sm:pt-20">
+      <section id="top" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 pt-12 sm:px-6 sm:pt-20">
         <p className="mb-5 inline-flex rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted">
-          Free spam risk check · Deep Report now available
+          New: Search Console traffic analysis, free
         </p>
         <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
           Will the next spam update hit your site?
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted">
           Spamlyze scans your site for the patterns Google&apos;s spam policies target and
-          tells you what to fix first. Check before the update, or diagnose after a drop.
+          tells you what to fix first. Connect Search Console to see if an update actually cut your traffic.
         </p>
         <div className="mt-10 max-w-3xl">
           <QuickCheckForm />
@@ -106,6 +110,8 @@ export default function Home() {
         </div>
       </section>
 
+      <GscShowcase />
+
       <section className="mx-auto w-full max-w-5xl px-4 py-20 sm:px-6">
         <h2 className="text-3xl font-semibold tracking-tight">What we check</h2>
         <p className="mt-3 max-w-2xl text-muted">
@@ -131,10 +137,14 @@ export default function Home() {
               <li>Your URL is all we need</li>
               <li>Spam risk score across 6 signals</li>
               <li>Top 3 issues with example pages</li>
+              <li>Search Console traffic check around each update</li>
               <li>Results in about 30 seconds</li>
             </ul>
           </div>
-          <div className="flex flex-col rounded-2xl border-2 border-accent bg-surface p-8">
+          <div className="relative flex flex-col rounded-2xl border-2 border-accent bg-surface p-8">
+            <span className="absolute -top-3 left-8 rounded-full bg-accent px-3 py-0.5 text-xs font-semibold text-white">
+              Most complete
+            </span>
             <h3 className="text-xl font-semibold">Deep Report</h3>
             <p className="mt-1 text-3xl font-semibold">
               {deepReportPrice()} <span className="text-base font-normal text-muted">· one-time</span>
@@ -143,6 +153,8 @@ export default function Home() {
               <li>Up to 500 pages analyzed one by one</li>
               <li>Risk score and findings for every spam policy</li>
               <li>Prioritized action plan with the pages to fix</li>
+              <li>Search Console: the exact pages that lost clicks after each update</li>
+              <li>PDF export</li>
               <li>Full refund if we can&apos;t analyze your site</li>
             </ul>
             <div className="mt-auto pt-8">
@@ -195,5 +207,83 @@ export default function Home() {
         </div>
       </section>
     </main>
+  );
+}
+
+/** Example data only: illustrates what the Search Console analysis shows. */
+const EXAMPLE = [100, 104, 98, 102, 106, 101, 99, 103, 100, 97, 64, 58, 61, 57, 60, 59, 62, 58, 61, 60];
+
+function GscShowcase() {
+  const W = 480;
+  const H = 180;
+  const x = (i: number) => 10 + (i / (EXAMPLE.length - 1)) * (W - 20);
+  const y = (v: number) => 10 + (1 - v / 120) * (H - 30);
+  const path = EXAMPLE.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  return (
+    <section className="mx-auto w-full max-w-5xl px-4 pt-20 sm:px-6">
+      <div className="grid items-center gap-10 lg:grid-cols-2">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-accent">Search Console analysis</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight">Did the update actually hit you?</h2>
+          <p className="mt-4 leading-relaxed text-muted">
+            Connect Google Search Console in one click. We line up 16 months of your clicks with every spam and core
+            update Google has confirmed, and tell you which ones cut your traffic.
+          </p>
+          <ul className="mt-6 space-y-3">
+            <li>
+              <span className="font-semibold">Free with the Quick Check:</span>{" "}
+              <span className="text-muted">your traffic chart and a verdict for each update.</span>
+            </li>
+            <li>
+              <span className="font-semibold">In the Deep Report:</span>{" "}
+              <span className="text-muted">
+                the exact pages that lost clicks, plus up to 500 pages reviewed and a prioritized action plan.
+              </span>
+            </li>
+            <li>
+              <span className="font-semibold">Private by design:</span>{" "}
+              <span className="text-muted">read-only access, used once, then revoked. We never keep a token.</span>
+            </li>
+          </ul>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a
+              href="#top"
+              className="inline-flex h-12 items-center rounded-xl border border-line px-5 font-semibold hover:border-accent"
+            >
+              Run the free check
+            </a>
+            <a
+              href="#deep-report"
+              className="inline-flex h-12 items-center rounded-xl bg-accent px-5 font-semibold text-white hover:bg-accent-strong"
+            >
+              Get the Deep Report
+            </a>
+          </div>
+        </div>
+        <figure className="rounded-2xl border border-line bg-surface p-5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold">Daily clicks</span>
+            <span className="text-muted">Example</span>
+          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 h-auto w-full" role="img" aria-label="Example: clicks drop by 40% after a spam update">
+            <rect x={x(9.5)} y={10} width={x(11) - x(9.5)} height={H - 30} className="fill-red-500/20" />
+            <line x1={10} x2={W - 10} y1={H - 20} y2={H - 20} className="stroke-line" />
+            <path d={path} fill="none" className="stroke-foreground" strokeWidth={2} strokeLinejoin="round" />
+            <text x={x(10.25)} y={H - 6} textAnchor="middle" className="fill-current text-[11px] opacity-60">
+              Spam update
+            </text>
+          </svg>
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-line p-3 text-sm">
+            <span>August spam update</span>
+            <span className="flex items-center gap-3">
+              <span className="whitespace-nowrap tabular-nums text-muted">-40% clicks</span>
+              <span className="whitespace-nowrap rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300">
+                Likely hit
+              </span>
+            </span>
+          </div>
+        </figure>
+      </div>
+    </section>
   );
 }

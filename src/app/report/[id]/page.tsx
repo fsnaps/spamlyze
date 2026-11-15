@@ -195,8 +195,9 @@ async function Report({
       <section id="deep-report" className="mt-12 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
-          This check looked at {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one by one and
-          gives you a prioritized action plan with the exact pages to fix.
+          This check looked at {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one by one, shows
+          which pages lost clicks after each update with Search Console, and gives you a prioritized action plan with
+          the exact pages to fix.
         </p>
         <div className="mt-5 max-w-md">
           {deepReportEnabled() ? (

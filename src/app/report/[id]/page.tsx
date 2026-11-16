@@ -5,7 +5,8 @@ import { getCheck } from "@/lib/check/run";
 import { ScoreGauge } from "@/components/score-gauge";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { DeepCheckout } from "@/components/deep-checkout";
-import { deepReportEnabled, deepReportPrice } from "@/lib/deep/config";
+import { deepPricingNow, deepReportEnabled } from "@/lib/deep/config";
+import { formatUsd } from "@/lib/pricing";
 import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
@@ -76,7 +77,13 @@ async function Report({
   if (!check) notFound();
   const gsc = await getQuickImport(typeof query.g === "string" ? query.g : undefined, id);
   const gscResult = typeof query.gsc === "string" ? query.gsc : undefined;
-  const deepCta = deepReportEnabled() ? `Get the Deep Report (${deepReportPrice()})` : "Join the Deep Report waitlist";
+  const pricing = await deepPricingNow();
+  const deepPrice = formatUsd(pricing.cents);
+  const deepCta = !deepReportEnabled()
+    ? "Join the Deep Report waitlist"
+    : pricing.promo
+      ? `Get the Deep Report (${deepPrice}, ${pricing.promo.label} -${pricing.promo.percentOff}%)`
+      : `Get the Deep Report (${deepPrice})`;
   const a = check.analysis;
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
@@ -201,7 +208,7 @@ async function Report({
         </p>
         <div className="mt-5 max-w-md">
           {deepReportEnabled() ? (
-            <DeepCheckout url={check.url} price={deepReportPrice()} />
+            <DeepCheckout url={check.url} price={deepPrice} />
           ) : (
             <WaitlistForm source="report" site={check.domain} cta="Notify me at launch" />
           )}

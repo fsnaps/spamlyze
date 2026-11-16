@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { DeepCheckout } from "@/components/deep-checkout";
-import { deepReportPrice } from "@/lib/deep/config";
+import { DeepCheckoutNow } from "@/components/deep-price";
 
 // Unlinked entry point to test the Deep Report before it's switched on for everyone.
 export const metadata: Metadata = {
@@ -14,7 +13,7 @@ export default function DeepTryPage() {
       <h1 className="text-3xl font-semibold tracking-tight">Deep Report</h1>
       <p className="mt-3 text-muted">Up to 500 pages reviewed one by one, with a prioritized action plan.</p>
       <div className="mt-8">
-        <DeepCheckout price={deepReportPrice()} />
+        <DeepCheckoutNow />
       </div>
     </main>
   );

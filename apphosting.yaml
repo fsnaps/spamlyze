@@ -61,6 +61,28 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Time-boxed Deep Report promo. Checked on every request: it starts and stops on its own,
+  # no redeploy needed. PROMO_ENDS_AT is exclusive. Leave PROMO_PERCENT_OFF at "0" to disable.
+  - variable: PROMO_LABEL
+    value: "Black Friday"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: PROMO_PERCENT_OFF
+    value: "40"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: PROMO_STARTS_AT
+    value: "2026-11-16T00:00:00+01:00"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: PROMO_ENDS_AT
+    value: "2026-12-01T00:00:00+01:00"
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: DEEP_REPORT_MODEL
     value: "claude-opus-5-5"
     availability:

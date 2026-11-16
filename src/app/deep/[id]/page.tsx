@@ -7,7 +7,7 @@ import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { PrintButton } from "@/components/print-button";
 import { PurchaseTracker } from "@/components/purchase-tracker";
-import { deepReportPrice } from "@/lib/deep/config";
+import { deepPricing } from "@/lib/pricing";
 import { ScoreGauge } from "@/components/score-gauge";
 import { confirmPayment, getDeepPages, getDeepReport, isDeepId } from "@/lib/deep/job";
 import { publicStatus } from "@/lib/deep/status";
@@ -107,7 +107,7 @@ async function DeepView({
       <p className="text-sm text-muted">Deep Report</p>
       <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{report.domain}</h1>
       {report.status !== "awaiting_payment" && typeof sessionId === "string" && (
-        <PurchaseTracker id={id} value={Number(deepReportPrice().slice(1))} />
+        <PurchaseTracker id={id} value={deepPricing().cents / 100} />
       )}
       <div className="mt-8">
         {report.status === "awaiting_payment" ? (

@@ -9,6 +9,3 @@ export function stripe(): Stripe {
   client ??= new Stripe(key);
   return client;
 }
-
-/** Deep Report price in cents (USD). */
-export const DEEP_REPORT_PRICE_CENTS = Number(process.env.DEEP_REPORT_PRICE_CENTS ?? 4900);

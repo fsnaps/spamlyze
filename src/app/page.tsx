@@ -1,6 +1,6 @@
-import { DeepCheckout } from "@/components/deep-checkout";
+import { DeepCheckoutNow, DeepPriceLarge, DeepPriceText, PromoBanner } from "@/components/deep-price";
 import { QuickCheckForm } from "@/components/quick-check-form";
-import { deepReportEnabled, deepReportPrice } from "@/lib/deep/config";
+import { deepReportEnabled } from "@/lib/deep/config";
 import { WaitlistForm } from "@/components/waitlist-form";
 
 const signals = [
@@ -74,6 +74,7 @@ const faqs = [
 export default function Home() {
   return (
     <main className="flex-1">
+      {deepReportEnabled() && <PromoBanner />}
       <section id="top" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 pt-12 sm:px-6 sm:pt-20">
         <p className="mb-5 inline-flex rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted">
           New: Search Console traffic analysis, free
@@ -91,7 +92,7 @@ export default function Home() {
         <p className="mt-2 text-sm text-muted">
           Need the full picture?{" "}
           <a href="#deep-report" className="font-medium text-foreground underline decoration-accent underline-offset-4">
-            Get the Deep Report: 500 pages and an action plan for {deepReportPrice()}
+            Get the Deep Report: 500 pages and an action plan for <DeepPriceText />
           </a>
         </p>
       </section>
@@ -146,9 +147,7 @@ export default function Home() {
               Most complete
             </span>
             <h3 className="text-xl font-semibold">Deep Report</h3>
-            <p className="mt-1 text-3xl font-semibold">
-              {deepReportPrice()} <span className="text-base font-normal text-muted">· one-time</span>
-            </p>
+            <DeepPriceLarge />
             <ul className="mt-6 space-y-2 text-muted">
               <li>Up to 500 pages analyzed one by one</li>
               <li>Risk score and findings for every spam policy</li>
@@ -159,7 +158,7 @@ export default function Home() {
             </ul>
             <div className="mt-auto pt-8">
               {deepReportEnabled() ? (
-                <DeepCheckout price={deepReportPrice()} />
+                <DeepCheckoutNow />
               ) : (
                 <WaitlistForm source="deep_report" compact cta="Notify me at launch" />
               )}

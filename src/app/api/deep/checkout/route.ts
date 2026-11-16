@@ -2,7 +2,8 @@ import { FetchBlockedError, normalizeInputUrl, safeFetch } from "@/lib/check/saf
 import { createDeepReport } from "@/lib/deep/job";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
-import { DEEP_REPORT_PRICE_CENTS, stripe } from "@/lib/stripe";
+import { deepPricing } from "@/lib/pricing";
+import { stripe } from "@/lib/stripe";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { url?: unknown } | null;
@@ -21,6 +22,9 @@ export async function POST(request: Request) {
 
   try {
     const id = await createDeepReport(url);
+    // Priced at request time, so a promo starts and ends on schedule without a redeploy.
+    const pricing = deepPricing();
+    const promo = pricing.promo;
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -28,15 +32,15 @@ export async function POST(request: Request) {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: DEEP_REPORT_PRICE_CENTS,
+            unit_amount: pricing.cents,
             product_data: {
-              name: "Spamlyze Deep Report",
+              name: promo ? `Spamlyze Deep Report (${promo.label} -${promo.percentOff}%)` : "Spamlyze Deep Report",
               description: `Page-by-page spam risk analysis of ${url.hostname} (up to 500 pages)`,
             },
           },
         },
       ],
-      metadata: { deepId: id, domain: url.hostname },
+      metadata: { deepId: id, domain: url.hostname, ...(promo && { promo: `${promo.label} -${promo.percentOff}%` }) },
       payment_intent_data: { metadata: { deepId: id, domain: url.hostname } },
       allow_promotion_codes: true,
       success_url: `${site.url}/deep/${id}?session_id={CHECKOUT_SESSION_ID}`,

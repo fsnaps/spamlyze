@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { CrawlError, discoverSite, fetchPageData, mapLimit, spreadSample, type PageData } from "@/lib/check/crawl";
 import { FetchBlockedError } from "@/lib/check/safe-fetch";
 import { computeMetrics } from "@/lib/check/metrics";
+import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
 import { stripe } from "@/lib/stripe";
 import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./analyze";
 import { sendDeepReady, sendDeepStarted } from "./emails";
@@ -20,6 +21,8 @@ const JUDGE_BATCH = 15;
 const JUDGE_BATCHES_PER_STEP = 2;
 const LEASE_MS = 75_000;
 const MAX_FAILURES = 5;
+/** Losing pages from Search Console that may be added on top of the sitemap sample. */
+const MAX_GSC_EXTRA = 100;
 const DEEP_SITEMAP_LIMITS = { maxFiles: 25, maxUrls: 20_000, childrenPerIndex: 20 };
 
 const reports = () => db().collection("deepReports");
@@ -93,6 +96,63 @@ export async function confirmPayment(id: string, sessionId: string): Promise<boo
   return true;
 }
 
+/**
+ * Stores imported Search Console data. The first time, the job folds the pages that lost
+ * clicks into its crawl, and a finished report is reopened to update its action plan.
+ */
+export async function attachSearchConsole(id: string, gsc: GscData, losses: PageLoss[]) {
+  await db().runTransaction(async (tx) => {
+    const ref = reports().doc(id);
+    const r = (await tx.get(ref)).data() as DeepReport | undefined;
+    if (!r) return;
+    const merge = !r.gscMerged && losses.length > 0 && !r.robotsBlocked;
+    const reopen = merge && r.status === "done";
+    tx.update(ref, {
+      gsc,
+      ...(merge ? { gscLosses: losses, gscPending: true } : {}),
+      ...(reopen ? { status: "running", failures: 0, leaseUntil: 0 } : {}),
+    });
+  });
+}
+
+/** Losing pages on the same site, as URLs we can crawl. */
+function lossUrls(r: DeepReport): string[] {
+  const host = r.origin ? new URL(r.origin).hostname.replace(/^www\./, "") : r.domain;
+  return (r.gscLosses ?? [])
+    .map((l) => l.url)
+    .filter((u) => {
+      try {
+        const x = new URL(u);
+        return /^https?:$/.test(x.protocol) && x.hostname.replace(/^www\./, "") === host;
+      } catch {
+        return false;
+      }
+    });
+}
+
+/** Folds the losing pages into the job, whatever phase it's in. Runs under the lease. */
+function mergeGsc(r: DeepReport): Patch {
+  const done = { gscPending: false, gscMerged: true };
+  const urls = r.urls;
+  // Not discovered yet: discover() puts the losing pages first.
+  if (!urls || r.phase === "discover") return done;
+  const known = new Set(urls.map(pageKey));
+  const losing = lossUrls(r);
+  if (r.phase === "crawl") {
+    const cursor = r.crawlCursor ?? 1;
+    const crawled = new Set(urls.slice(0, cursor).map(pageKey));
+    const first = losing.filter((u) => !crawled.has(pageKey(u))).slice(0, MAX_GSC_EXTRA);
+    const firstKeys = new Set(first.map(pageKey));
+    const rest = urls.slice(cursor).filter((u) => !firstKeys.has(pageKey(u)));
+    const next = [...urls.slice(0, cursor), ...first, ...rest];
+    return { ...done, urls: next.slice(0, Math.max(MAX_PAGES, cursor + first.length)) };
+  }
+  // Crawl is over: crawl the missing losing pages, then review them and rewrite the plan.
+  const missing = losing.filter((u) => !known.has(pageKey(u))).slice(0, MAX_GSC_EXTRA);
+  if (missing.length) return { ...done, urls: [...urls, ...missing], crawlCursor: urls.length, phase: "crawl" };
+  return r.phase === "done" ? { ...done, phase: "synthesize" } : done;
+}
+
 async function acquireLease(id: string): Promise<DeepReport | null> {
   return db().runTransaction(async (tx) => {
     const ref = reports().doc(id);
@@ -111,9 +171,10 @@ export async function runStep(id: string): Promise<DeepReport | null> {
   if (!report) return getDeepReport(id);
   const ref = reports().doc(id);
   try {
-    const patch = await PHASES[report.phase](id, report);
+    const patch = report.gscPending ? mergeGsc(report) : await PHASES[report.phase](id, report);
     await ref.update({ ...patch, leaseUntil: 0, error: FieldValue.delete() });
-    if (patch.status === "done") {
+    // A report updated with Search Console data was already delivered once: no second email.
+    if (patch.status === "done" && !report.finishedAt) {
       const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
       await Promise.all([
         report.email ? sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel) : null,
@@ -126,6 +187,11 @@ export async function runStep(id: string): Promise<DeepReport | null> {
     console.error("deep step failed", id, report.phase, message);
     const failures = (report.failures ?? 0) + 1;
     const failed = userFacing || failures >= MAX_FAILURES;
+    if (failed && report.finishedAt) {
+      // The Search Console update of a delivered report failed: keep the report as it was, no refund.
+      await ref.update({ leaseUntil: 0, failures: 0, status: "done", phase: "done", gscPending: false, error: FieldValue.delete() });
+      return getDeepReport(id);
+    }
     await ref.update({
       leaseUntil: 0,
       failures,
@@ -167,7 +233,17 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
     if (site.robotsBlocked) {
       return { status: "done", phase: "done", robotsBlocked: true, origin: site.origin, finishedAt: FieldValue.serverTimestamp() };
     }
-    const urls = [site.homepage.url, ...spreadSample(site.pool, MAX_PAGES - 1)];
+    // Pages that lost clicks in Search Console (if already connected) go first.
+    const homeKey = pageKey(site.homepage.url);
+    const losing = lossUrls({ ...r, origin: site.origin })
+      .filter((u) => pageKey(u) !== homeKey)
+      .slice(0, MAX_GSC_EXTRA);
+    const losingKeys = new Set(losing.map(pageKey));
+    const sample = spreadSample(
+      site.pool.filter((u) => !losingKeys.has(pageKey(u))),
+      MAX_PAGES - 1 - losing.length,
+    );
+    const urls = [site.homepage.url, ...losing, ...sample];
     return {
       phase: "crawl",
       origin: site.origin,
@@ -197,7 +273,10 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
     return {
       crawlCursor: next,
       pagesCrawled: FieldValue.increment(n),
-      ...(next >= urls.length ? { phase: "analyze", analyzeCursor: 0, pagesAnalyzed: 0 } : {}),
+      // Back from a Search Console top-up, the review resumes where it stopped.
+      ...(next >= urls.length
+        ? { phase: "analyze", analyzeCursor: r.analyzeCursor ?? 0, pagesAnalyzed: r.pagesAnalyzed ?? 0 }
+        : {}),
     };
   },
 
@@ -249,6 +328,7 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
       all.map((p) => ({ page: p, verdict: p.verdict })),
       metrics,
       r.sitemapSample ?? [],
+      r.gsc ? { gsc: r.gsc, losses: r.gscLosses ?? [] } : undefined,
     );
     const { analysis, usage } = await synthesize(input, new Set(all.map((p) => p.url)));
     return {

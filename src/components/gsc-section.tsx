@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { fillGaps, type GscData, type UpdateImpact } from "@/lib/gsc/data";
 import { UPDATES } from "@/lib/gsc/updates";
 
-const MESSAGES: Record<string, string> = {
+export const GSC_MESSAGES: Record<string, string> = {
   connected: "Search Console connected. Your traffic is now lined up with Google's updates below.",
   denied: "Search Console wasn't connected: the read-only permission was not granted.",
   no_property: "This Google account has no Search Console property for this site. Try another Google account.",
@@ -14,6 +14,13 @@ const VERDICT: Record<UpdateImpact["verdict"], { label: string; cls: string }> =
   possible: { label: "Possible impact", cls: "bg-amber-500/15 text-amber-800 dark:text-amber-300" },
   stable: { label: "No clear impact", cls: "bg-stone-500/10 text-muted" },
   gain: { label: "Gained", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
+};
+
+const QUALITY: Record<string, string> = {
+  good: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  ok: "bg-stone-500/10 text-muted",
+  weak: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+  spammy: "bg-red-500/10 text-red-700 dark:text-red-300",
 };
 
 const pct = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}%`;
@@ -28,11 +35,15 @@ type Props = {
   enabled: boolean;
   /** Shown instead of the list of losing pages when the free plan withholds it. */
   upsell?: ReactNode;
+  /** Replaces the default pitch on the "Connect" card. */
+  pitch?: ReactNode;
+  /** Our verdict on a losing page (Deep Report), shown next to its click loss. */
+  verdictOf?: (url: string) => string | undefined;
 };
 
-export function GscSection({ connectHref, gsc, result, enabled, upsell }: Props) {
+export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, verdictOf }: Props) {
   if (!gsc && !enabled) return null;
-  const message = result ? MESSAGES[result] : null;
+  const message = result ? GSC_MESSAGES[result] : null;
   return (
     <section id="search-console" className="mt-12 scroll-mt-8">
       <h2 className="text-2xl font-semibold tracking-tight">Traffic around Google updates</h2>
@@ -42,12 +53,12 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell }: Props)
         </p>
       )}
       {gsc ? (
-        <GscResults gsc={gsc} connectHref={connectHref} enabled={enabled} upsell={upsell} />
+        <GscResults gsc={gsc} connectHref={connectHref} enabled={enabled} upsell={upsell} verdictOf={verdictOf} />
       ) : (
         <div className="mt-6 rounded-2xl border-2 border-accent bg-surface p-6">
           <p className="leading-relaxed">
-            Connect Google Search Console to see whether your clicks actually dropped when a spam or core update rolled
-            out, and which pages lost the most.
+            {pitch ??
+              "Connect Google Search Console to see whether your clicks actually dropped when a spam or core update rolled out, and which pages lost the most."}
           </p>
           <p className="mt-2 text-sm text-muted">
             Read-only access, used once to import 16 months of clicks and impressions for this site. We don&apos;t keep
@@ -65,7 +76,7 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell }: Props)
   );
 }
 
-function GscResults({ gsc, connectHref, enabled, upsell }: Omit<Props, "result"> & { gsc: GscData }) {
+function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props, "result" | "pitch"> & { gsc: GscData }) {
   const hits = gsc.updates.filter((u) => u.verdict === "hit" || u.verdict === "possible");
   return (
     <>
@@ -126,8 +137,17 @@ function GscResults({ gsc, connectHref, enabled, upsell }: Omit<Props, "result">
                 <a href={p.url} rel="nofollow noopener" target="_blank" className="min-w-0 truncate text-accent underline">
                   {p.url.replace(/^https?:\/\//, "")}
                 </a>
-                <span className="shrink-0 tabular-nums text-muted">
-                  {p.before} → {p.after} clicks / 28 days
+                <span className="flex shrink-0 items-center gap-2">
+                  {verdictOf?.(p.url) && (
+                    <span
+                      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${QUALITY[verdictOf(p.url)!] ?? QUALITY.ok}`}
+                    >
+                      {verdictOf(p.url)}
+                    </span>
+                  )}
+                  <span className="tabular-nums text-muted">
+                    {p.before} → {p.after} clicks / 28 days
+                  </span>
                 </span>
               </li>
             ))}

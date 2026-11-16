@@ -1,7 +1,7 @@
 import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
 import type { DeepAnalysis, PageVerdict } from "./analyze";
-import type { GscData } from "@/lib/gsc/data";
+import type { GscData, PageLoss } from "@/lib/gsc/data";
 
 export type DeepPhase = "discover" | "crawl" | "analyze" | "synthesize" | "done";
 export type DeepStatus = "awaiting_payment" | "running" | "done" | "failed";
@@ -36,6 +36,12 @@ export type DeepReport = {
   usage?: { input: number; output: number };
   /** Search Console figures, imported once when the buyer connects their property. */
   gsc?: GscData;
+  /** Pages that lost clicks around the worst update: crawled first, cross-referenced in the plan. */
+  gscLosses?: PageLoss[];
+  /** Set when Search Console was just connected: the next step folds the losing pages into the job. */
+  gscPending?: boolean;
+  /** The losing pages were folded in once. A later refresh only updates the figures. */
+  gscMerged?: boolean;
 };
 
 /** One crawled page, stored in deepReports/{id}/pages/{index}. */

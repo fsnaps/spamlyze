@@ -26,6 +26,7 @@ const sitemap = [
 ];
 
 const claudeCalls: string[] = [];
+let lastPlanInput = "";
 function claudeReply(body: { system: string; messages: { content: string }[] }) {
   const input = body.messages[0].content;
   let out: unknown;
@@ -41,6 +42,7 @@ function claudeReply(body: { system: string; messages: { content: string }[] }) 
     };
   } else if (body.system.includes("action plan")) {
     claudeCalls.push("plan");
+    lastPlanInput = input;
     out = {
       actions: [
         {
@@ -94,12 +96,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url === "https://shop.test/sitemap.xml")
     return new Response(`<urlset>${sitemap.map((u) => `<url><loc>${u}</loc></url>`).join("")}</urlset>`);
   if (url.includes("/guides/")) return new Response(html("Guide", 900), htmlHeaders);
+  if (url.includes("/old/")) return new Response(html("Old page", 60), htmlHeaders);
   if (url.includes("/coupons/")) return new Response(html("Coupon code", 80, '<a href="https://aff.example/x" rel="sponsored">deal</a>'), htmlHeaders);
   if (url === "https://down.test/") return new Response("oops", { status: 500 });
   return new Response("not found", { status: 404 });
 }) as typeof fetch;
 
-const { createDeepReport, getDeepPages, getDeepReport, runStep } = await import("../src/lib/deep/job");
+const { attachSearchConsole, createDeepReport, getDeepPages, getDeepReport, runStep } = await import("../src/lib/deep/job");
 const { db } = await import("../src/lib/firebase-admin");
 
 async function startPaid(url: string) {
@@ -160,5 +163,66 @@ assert.equal(day.deepFailed, 1);
 assert.equal(day.opusInputTokens, 7000, "token usage counted per call");
 assert.ok(apiCostUsd(day) > 0);
 
-console.log("all deep report tests passed", { steps: claudeCalls.length, usage: r.usage });
+// Search Console connected after the report was delivered: the losing pages are added,
+// reviewed, and the plan is rewritten with them, without a second email.
+const gscData = {
+  property: "sc-domain:shop.test",
+  importedAt: new Date().toISOString(),
+  daily: [],
+  updates: [],
+  losers: { update: "March 2024 spam update", pages: [] },
+  lostPages: 8,
+};
+const losses = [
+  { url: "https://www.shop.test/coupons/code-3/", before: 120, after: 15 }, // already crawled (www + slash)
+  ...Array.from({ length: 6 }, (_, i) => ({ url: `https://shop.test/old/page-${i}`, before: 50 - i, after: 5 })),
+  { url: "https://other.test/x", before: 40, after: 0 }, // another site: ignored
+];
+await attachSearchConsole(id, gscData, losses);
+r = (await getDeepReport(id))!;
+assert.equal(r.status, "running", "a delivered report is reopened");
+for (let i = 0; i < 30 && r.status === "running"; i++) r = (await runStep(id))!;
+assert.equal(r.status, "done", `update ended in ${r.status}: ${r.error}`);
+assert.equal(r.urls!.length, 77, "6 missing losing pages added");
+assert.equal(r.pagesCrawled, 77);
+assert.equal(r.pagesAnalyzed, 77, "only the new pages are reviewed again");
+assert.equal(r.gscMerged, true);
+assert.ok(lastPlanInput.includes('"searchConsole"'), "the plan sees Search Console data");
+assert.ok(lastPlanInput.includes("coupons/code-3") && lastPlanInput.includes('"before": 120'), "losses joined with verdicts");
+assert.equal(buyerEmails().length, 1, "no second 'ready' email");
+
+// A refresh only updates the figures.
+await attachSearchConsole(id, { ...gscData, lostPages: 9 }, losses);
+r = (await getDeepReport(id))!;
+assert.equal(r.status, "done");
+assert.equal(r.gsc!.lostPages, 9);
+
+// Connected before the job starts: losing pages are crawled first.
+const early = await startPaid("https://shop.test/");
+await attachSearchConsole(early, gscData, losses);
+r = (await runStep(early))!; // folds in (nothing crawled yet)
+assert.equal(r.gscPending, false);
+r = (await runStep(early))!; // discover
+assert.deepEqual(
+  r.urls!.slice(1, 8),
+  losses.slice(0, 7).map((l) => l.url),
+  "losing pages right after the homepage",
+);
+assert.equal(r.urls!.length, 77);
+
+// Connected mid-crawl: the remaining losing pages jump the queue.
+const mid = await startPaid("https://shop.test/");
+r = (await runStep(mid))!; // discover
+r = (await runStep(mid))!; // first crawl slice (40 pages)
+assert.equal(r.crawlCursor, 41);
+await attachSearchConsole(mid, gscData, losses);
+r = (await runStep(mid))!;
+const { pageKey } = await import("../src/lib/gsc/data");
+const crawledKeys = new Set(r.urls!.slice(0, 41).map(pageKey));
+const pending = losses.slice(0, 7).filter((l) => !crawledKeys.has(pageKey(l.url))).map((l) => l.url);
+assert.deepEqual(r.urls!.slice(41, 41 + pending.length), pending, "losing pages not crawled yet go next");
+assert.equal(new Set(r.urls!.map(pageKey)).size, r.urls!.length, "no duplicates");
+assert.equal(r.crawlCursor, 41);
+
+console.log("all deep report tests passed", { steps: claudeCalls.length });
 process.exit(0);

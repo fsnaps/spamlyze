@@ -3,7 +3,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/firebase-admin";
 import { getCheck } from "@/lib/check/run";
-import { getDeepReport } from "@/lib/deep/job";
+import { attachSearchConsole, getDeepReport } from "@/lib/deep/job";
 import { findProperty, GscError, importSearchData } from "@/lib/gsc/data";
 import { exchangeCode, GSC_SCOPE, NONCE_COOKIE, readState, revoke } from "@/lib/gsc/oauth";
 import { site } from "@/lib/site";
@@ -36,10 +36,11 @@ export async function GET(request: NextRequest) {
     token = t.accessToken;
     if (!t.scope.split(" ").includes(GSC_SCOPE)) return back("denied");
     const property = await findProperty(token, domain);
-    const gsc = await importSearchData(token, property);
+    const { data: gsc, losses } = await importSearchData(token, property);
     await track({ gscConnected: 1 });
     if (kind === "d") {
-      await db().collection("deepReports").doc(id).update({ gsc });
+      // The job crawls and reviews the pages that lost clicks first, and ties the action plan to them.
+      await attachSearchConsole(id, gsc, losses);
       return back("connected");
     }
     // Quick Checks are shared by everyone who checks the same domain, so the

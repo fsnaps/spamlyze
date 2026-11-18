@@ -109,8 +109,14 @@ function verdictFor(clicksChange: number, beforeClicks: number): UpdateImpact["v
   return "stable";
 }
 
-/** Imports 16 months of daily clicks/impressions and measures each known update. */
-export async function importSearchData(token: string, property: string): Promise<GscData> {
+/** Pages kept for the Deep Report to crawl first and cross-reference with its verdicts. */
+const MAX_LOSSES = 150;
+
+/**
+ * Imports 16 months of daily clicks/impressions and measures each known update.
+ * `losses` is the longer list of pages that lost clicks around the worst update.
+ */
+export async function importSearchData(token: string, property: string): Promise<{ data: GscData; losses: PageLoss[] }> {
   const endDate = Date.now() - 3 * DAY;
   const startDate = endDate - 485 * DAY;
   const rows = await query(token, property, {
@@ -149,6 +155,7 @@ export async function importSearchData(token: string, property: string): Promise
     .sort((a, b) => a.clicksChange - b.clicksChange || (a.kind === "spam" ? -1 : 1))[0];
   let losers: GscData["losers"] = null;
   let lostPages = 0;
+  let losses: PageLoss[] = [];
   if (worst) {
     const w = windows(worst, last);
     const byPage = (from: number, to: number) =>
@@ -167,7 +174,18 @@ export async function importSearchData(token: string, property: string): Promise
       .sort((a, b) => b.before - b.after - (a.before - a.after));
     losers = { update: worst.name, pages: pages.slice(0, 15) };
     lostPages = pages.length;
+    losses = pages.slice(0, MAX_LOSSES);
   }
 
-  return { property, importedAt: new Date().toISOString(), daily, updates, losers, lostPages };
+  return { data: { property, importedAt: new Date().toISOString(), daily, updates, losers, lostPages }, losses };
+}
+
+/** Compares URLs from Search Console and from the crawl: ignores scheme, "www.", trailing slash and hash. */
+export function pageKey(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
+  } catch {
+    return url;
+  }
 }

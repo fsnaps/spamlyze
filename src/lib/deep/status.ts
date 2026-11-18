@@ -8,6 +8,8 @@ export type DeepStatusView = {
   pagesAnalyzed: number;
   error: string | null;
   refunded: boolean;
+  /** A delivered report being updated with Search Console data. */
+  updating: boolean;
 };
 
 export function publicStatus(r: DeepReport): DeepStatusView {
@@ -19,5 +21,6 @@ export function publicStatus(r: DeepReport): DeepStatusView {
     pagesAnalyzed: typeof r.pagesAnalyzed === "number" ? r.pagesAnalyzed : 0,
     error: r.error ?? null,
     refunded: Boolean(r.refunded),
+    updating: Boolean(r.finishedAt),
   };
 }

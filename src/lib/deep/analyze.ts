@@ -5,6 +5,7 @@ import { z } from "zod";
 import { SIGNAL_IDS } from "@/lib/check/analyze";
 import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
+import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
 import { track } from "@/lib/stats";
 
 export const DEEP_MODEL = () => process.env.DEEP_REPORT_MODEL || "claude-opus-5-5";
@@ -155,7 +156,23 @@ export type SiteSummaryInput = {
   qualityCounts: Record<string, number>;
   signalCounts: Record<string, number>;
   flaggedBySection: { section: string; pages: number; weakOrSpammy: number }[];
-  flaggedPages: { url: string; quality: string; signals: string[]; note: string; words: number }[];
+  flaggedPages: {
+    url: string;
+    quality: string;
+    signals: string[];
+    note: string;
+    words: number;
+    /** Clicks per 28 days before and after the worst update, when Search Console is connected. */
+    clicks?: { before: number; after: number };
+  }[];
+  /** Present when the site owner connected Search Console. */
+  searchConsole?: {
+    updates: { name: string; kind: string; clicksChange: string; verdict: string }[];
+    worstUpdate: string | null;
+    pagesThatLostClicks: number;
+    /** Losing pages we reviewed, biggest losses first, with our verdict. */
+    losingPages: { url: string; before: number; after: number; quality: string; signals: string[]; note: string }[];
+  };
 };
 
 export function buildSummaryInput(
@@ -164,7 +181,9 @@ export function buildSummaryInput(
   pages: { page: PageData; verdict?: PageVerdict }[],
   metrics: Metrics,
   sitemapPathSample: string[],
+  searchConsole?: { gsc: GscData; losses: PageLoss[] },
 ): SiteSummaryInput {
+  const lossByKey = new Map((searchConsole?.losses ?? []).map((l) => [pageKey(l.url), l]));
   const qualityCounts: Record<string, number> = {};
   const signalCounts: Record<string, number> = {};
   const sections = new Map<string, { pages: number; weakOrSpammy: number }>();
@@ -179,9 +198,18 @@ export function buildSummaryInput(
     sections.set(section, entry);
   }
   const rank = { spammy: 0, weak: 1, ok: 2, good: 3, unknown: 4 } as Record<string, number>;
+  const lost = (url: string) => {
+    const l = lossByKey.get(pageKey(url));
+    return l ? { before: l.before, after: l.after } : undefined;
+  };
   const flaggedPages = pages
     .filter(({ verdict }) => verdict && (verdict.quality === "weak" || verdict.quality === "spammy" || verdict.signals.length))
-    .sort((a, b) => rank[a.verdict!.quality] - rank[b.verdict!.quality] || b.verdict!.signals.length - a.verdict!.signals.length)
+    .sort(
+      (a, b) =>
+        rank[a.verdict!.quality] - rank[b.verdict!.quality] ||
+        Number(Boolean(lost(b.page.url))) - Number(Boolean(lost(a.page.url))) ||
+        b.verdict!.signals.length - a.verdict!.signals.length,
+    )
     .slice(0, 80)
     .map(({ page, verdict }) => ({
       url: page.url,
@@ -189,7 +217,31 @@ export function buildSummaryInput(
       signals: verdict!.signals,
       note: verdict!.note,
       words: page.wordCount,
+      ...(lost(page.url) ? { clicks: lost(page.url) } : {}),
     }));
+  let sc: SiteSummaryInput["searchConsole"];
+  if (searchConsole) {
+    const { gsc } = searchConsole;
+    const losingPages = pages
+      .filter(({ page, verdict }) => verdict && lossByKey.has(pageKey(page.url)))
+      .map(({ page, verdict }) => {
+        const l = lossByKey.get(pageKey(page.url))!;
+        return { url: page.url, before: l.before, after: l.after, quality: verdict!.quality, signals: verdict!.signals, note: verdict!.note };
+      })
+      .sort((a, b) => b.before - b.after - (a.before - a.after))
+      .slice(0, 40);
+    sc = {
+      updates: gsc.updates.map((u) => ({
+        name: u.name,
+        kind: u.kind,
+        clicksChange: `${Math.round(u.clicksChange * 100)}%`,
+        verdict: u.verdict,
+      })),
+      worstUpdate: gsc.losers?.update ?? null,
+      pagesThatLostClicks: gsc.lostPages ?? 0,
+      losingPages,
+    };
+  }
   return {
     site,
     pagesAnalyzed: pages.length,
@@ -203,6 +255,7 @@ export function buildSummaryInput(
       .sort((a, b) => b.weakOrSpammy - a.weakOrSpammy || b.pages - a.pages)
       .slice(0, 20),
     flaggedPages,
+    ...(sc ? { searchConsole: sc } : {}),
   };
 }
 
@@ -215,7 +268,9 @@ Rules:
 - riskScore is 0-100 (0-29 low, 30-59 moderate, 60-100 high); each signal score uses the same scale.
 - Return exactly one entry per signal id. Use "unknown" only when the data gives no basis to judge.
 - summary: 3-4 sentences for the site owner. finding: 2-3 sentences with numbers from the input. exampleUrls: up to 5 URLs from the input.
-- Only cite URLs and numbers from the input. ${UNTRUSTED}`;
+- Only cite URLs and numbers from the input.
+- If searchConsole is present, it is the site's real Google traffic: say in the summary whether the site lost clicks after spam or core updates, and tie each finding to it when the pages that lost clicks show that signal (e.g. "12 of the 20 pages that lost the most clicks after the March 2024 spam update are thin"). A traffic drop on pages that look fine may come from something else (a core update, competition): say so instead of raising the risk.
+${UNTRUSTED}`;
 
 const PLAN_SYSTEM = `You are Spamlyze, an SEO consultant. You get the results of a page-by-page review of up to 500 pages of a website, plus site-wide metrics. Write a prioritized action plan that reduces the site's exposure to Google's spam updates.
 
@@ -226,7 +281,9 @@ Rules:
 - Each action targets a group of pages (a section, a template, a pattern) rather than a single page when possible. affectedPattern names it (e.g. "/product/* pages under 200 words"). affectedUrls: up to 5 example URLs from the input.
 - steps: 2-4 concrete steps (what to rewrite, merge, noindex, remove, qualify with rel="sponsored", etc.).
 - For a healthy site, focus on prevention and quick wins, and say so.
-- Only cite URLs and numbers from the input. Plain English, short sentences. ${UNTRUSTED}`;
+- Only cite URLs and numbers from the input. Plain English, short sentences.
+- If searchConsole is present, pages that both lost clicks after an update and were rated weak or spammy come first ("now"): list them in affectedUrls and quote their click loss in "why" (e.g. "lost 120 → 15 clicks per 28 days after the March 2024 spam update"). Flagged pages without a traffic loss come after.
+${UNTRUSTED}`;
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 

@@ -89,6 +89,9 @@ export function DeepRunner({ id, host, initial }: { id: string; host: string; in
 
   return (
     <div className="sl-fade-up rounded-3xl border border-line bg-surface p-6 sm:p-8">
+      {status.updating && (
+        <p className="mb-6 font-medium">Updating your report with your Search Console data: pages that lost clicks first.</p>
+      )}
       <div className="grid items-center gap-10 sm:grid-cols-[auto_1fr] sm:gap-12">
         <Radar host={host} />
         <ol className="mt-4 space-y-3 sm:mt-0">

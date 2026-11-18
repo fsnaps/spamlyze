@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { DeepRunner } from "@/components/deep-runner";
-import { GscSection } from "@/components/gsc-section";
+import { GSC_MESSAGES, GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { PrintButton } from "@/components/print-button";
 import { PurchaseTracker } from "@/components/purchase-tracker";
@@ -12,6 +12,7 @@ import { ScoreGauge } from "@/components/score-gauge";
 import { confirmPayment, getDeepPages, getDeepReport, isDeepId } from "@/lib/deep/job";
 import { publicStatus } from "@/lib/deep/status";
 import type { DeepPage, DeepReport } from "@/lib/deep/types";
+import { pageKey } from "@/lib/gsc/data";
 
 export const metadata: Metadata = {
   title: "Deep Report",
@@ -124,10 +125,50 @@ async function DeepView({
         ) : report.status === "done" ? (
           <FinishedReport id={id} report={report} gscResult={gscResult} />
         ) : (
-          <DeepRunner id={id} host={report.domain} initial={publicStatus(report)} />
+          <>
+            {report.status === "running" && <GscWhileRunning id={id} report={report} result={gscResult} />}
+            <DeepRunner id={id} host={report.domain} initial={publicStatus(report)} />
+          </>
         )}
       </div>
     </main>
+  );
+}
+
+/** Offers Search Console while the job runs, so the pages that lost clicks are reviewed first. */
+function GscWhileRunning({ id, report, result }: { id: string; report: DeepReport; result?: string }) {
+  if (!gscEnabled() && !report.gsc) return null;
+  const message = result && result !== "connected" ? GSC_MESSAGES[result] : null;
+  if (report.gsc) {
+    const losers = report.gsc.losers;
+    return (
+      <div id="search-console" className="mb-6 scroll-mt-8 rounded-2xl border border-line bg-surface p-6" role="status">
+        <p className="font-semibold">Search Console connected</p>
+        <p className="mt-1 text-muted">
+          {losers && (report.gsc.lostPages ?? 0) > 0
+            ? `${report.gsc.lostPages} pages lost clicks after the ${losers.update}. We review them first and build your action plan around them.`
+            : "No clear traffic drop after recent Google updates. Your traffic history will be in the report."}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div id="search-console" className="mb-6 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
+      {message && <p className="mb-4 rounded-xl border border-line px-4 py-3 text-sm">{message}</p>}
+      <p className="font-semibold">Recommended: connect Search Console while we work</p>
+      <p className="mt-2 leading-relaxed text-muted">
+        We&apos;ll find the pages that lost clicks after Google&apos;s spam and core updates, review those first, and
+        tie your action plan to your real traffic losses. Read-only, used once, and we don&apos;t keep access to your
+        account.
+      </p>
+      <a
+        href={`/api/gsc/connect?deep=${id}`}
+        className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
+      >
+        Connect Search Console
+      </a>
+      <p className="mt-3 text-xs text-muted">Optional. The analysis keeps running either way.</p>
+    </div>
   );
 }
 
@@ -150,6 +191,10 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
     )
     .sort((x, y) => (x.verdict.quality === y.verdict.quality ? 0 : x.verdict.quality === "spammy" ? -1 : 1));
   const date = report.finishedAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
+  const losses = new Map((report.gscLosses ?? []).map((l) => [pageKey(l.url), l]));
+  const verdicts = new Map(pages.filter((p) => p.verdict).map((p) => [pageKey(p.url), p.verdict!.quality]));
+  // Pages that lost clicks come first among the ones to review.
+  flagged.sort((x, y) => Number(losses.has(pageKey(y.url))) - Number(losses.has(pageKey(x.url))));
 
   return (
     <>
@@ -251,13 +296,26 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
                 <p className="mt-1 text-sm text-muted">
                   {p.wordCount} words · {p.verdict.note}
                 </p>
+                {losses.has(pageKey(p.url)) && (
+                  <p className="mt-1 text-xs font-medium text-red-700 dark:text-red-300">
+                    Lost clicks after the {report.gsc?.losers?.update ?? "last update"}:{" "}
+                    {losses.get(pageKey(p.url))!.before} → {losses.get(pageKey(p.url))!.after} per 28 days
+                  </p>
+                )}
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      <GscSection connectHref={`/api/gsc/connect?deep=${id}`} gsc={report.gsc} result={gscResult} enabled={gscEnabled()} />
+      <GscSection
+        connectHref={`/api/gsc/connect?deep=${id}`}
+        gsc={report.gsc}
+        result={gscResult}
+        enabled={gscEnabled()}
+        pitch="Connect Google Search Console: we'll find the pages that lost clicks after Google's spam and core updates, review them, and update your action plan around them. It takes a few minutes."
+        verdictOf={(url) => verdicts.get(pageKey(url))}
+      />
 
       <p className="mt-8 text-xs text-muted">
         This report is an estimate based on public pages. It is not a guarantee, and Spamlyze is not affiliated with

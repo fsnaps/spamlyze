@@ -31,6 +31,17 @@ export default function AdminPage() {
   );
 }
 
+function GscBadge() {
+  return (
+    <span
+      title="Search Console connected"
+      className="mr-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+    >
+      GSC
+    </span>
+  );
+}
+
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-5">
@@ -52,6 +63,13 @@ async function Dashboard() {
   const t7 = sum(days.slice(0, 7));
   const revenue = t.revenueCents / 100;
   const cost = apiCostUsd(t);
+  // Quick Checks with Search Console connected: flagged on the check, or found among the imports.
+  const checkIds = checks.docs.map((c) => c.id);
+  const imports = checkIds.length
+    ? await db().collection("gscImports").where("checkId", "in", checkIds.slice(0, 30)).select("checkId").get()
+    : null;
+  const gscChecks = new Set(imports?.docs.map((d) => d.get("checkId") as string));
+  for (const c of checks.docs) if (c.get("gscConnectedAt")) gscChecks.add(c.id);
   const paidDeeps = deeps.docs.filter((d) => d.get("status") !== "awaiting_payment").slice(0, 15);
 
   return (
@@ -132,6 +150,7 @@ async function Dashboard() {
                   {c.get("domain")}
                 </a>
                 <span className="shrink-0 text-muted tabular-nums">
+                  {gscChecks.has(c.id) && <GscBadge />}
                   {c.get("analysis.riskScore") ?? "–"}/100 · {c.get("createdAt")?.toDate().toISOString().slice(0, 10)}
                 </span>
               </li>
@@ -147,6 +166,7 @@ async function Dashboard() {
                   {d.get("domain")}
                 </a>
                 <span className="shrink-0 text-muted">
+                  {d.get("gsc") && <GscBadge />}
                   {d.get("status")}
                   {d.get("refunded") ? " · refunded" : ""} · {d.get("email") ?? ""}
                 </span>

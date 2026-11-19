@@ -37,16 +37,19 @@ type Props = {
   upsell?: ReactNode;
   /** Replaces the default pitch on the "Connect" card. */
   pitch?: ReactNode;
+  /** Short line under the heading, e.g. how this data is (or isn't) used in the score. */
+  note?: ReactNode;
   /** Our verdict on a losing page (Deep Report), shown next to its click loss. */
   verdictOf?: (url: string) => string | undefined;
 };
 
-export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, verdictOf }: Props) {
+export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, note, verdictOf }: Props) {
   if (!gsc && !enabled) return null;
   const message = result ? GSC_MESSAGES[result] : null;
   return (
     <section id="search-console" className="mt-12 scroll-mt-8">
       <h2 className="text-2xl font-semibold tracking-tight">Traffic around Google updates</h2>
+      {note && <p className="mt-2 text-sm text-muted">{note}</p>}
       {message && (
         <p className="mt-4 rounded-xl border border-line bg-surface px-4 py-3 text-sm" role="status">
           {message}
@@ -61,22 +64,31 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, v
               "Connect Google Search Console to see whether your clicks actually dropped when a spam or core update rolled out, and which pages lost the most."}
           </p>
           <p className="mt-2 text-sm text-muted">
-            Read-only access, used once to import 16 months of clicks and impressions for this site. We don&apos;t keep
-            access to your account.
+            We import 16 months of clicks and impressions for this site, once. You can see exactly what Google asks for on
+            the next screen.
           </p>
-          <a
-            href={connectHref}
-            className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white print:hidden"
-          >
-            Connect Search Console
-          </a>
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
+            <a
+              href={connectHref}
+              className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
+            >
+              Connect Search Console
+            </a>
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted">
+              <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                <rect x="3" y="7" width="10" height="7" rx="1.5" />
+                <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+              </svg>
+              Read-only · access revoked right after import · we never keep a token
+            </span>
+          </div>
         </div>
       )}
     </section>
   );
 }
 
-function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props, "result" | "pitch"> & { gsc: GscData }) {
+function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props, "result" | "pitch" | "note"> & { gsc: GscData }) {
   const hits = gsc.updates.filter((u) => u.verdict === "hit" || u.verdict === "possible");
   return (
     <>

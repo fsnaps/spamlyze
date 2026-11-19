@@ -54,6 +54,74 @@ function UrlList({ urls }: { urls: string[] }) {
   );
 }
 
+/**
+ * A rough range around the estimated score, wider when the sample covers less of the site.
+ * It's a reading aid, not a statistical interval: the score itself is an AI estimate.
+ */
+function scoreRange(score: number, sampled: number, sitemapCount: number | null) {
+  const total = sitemapCount === null ? null : sitemapCount + 1;
+  const share = total ? sampled / total : 0;
+  const margin = share >= 0.8 ? 5 : share >= 0.4 ? 10 : 15;
+  return { low: Math.max(0, score - margin), high: Math.min(100, score + margin) };
+}
+
+/** How much of the site the Quick Check saw, and what the Deep Report adds. */
+function Coverage({
+  sampled,
+  sitemapCount,
+  deepPages,
+  cta,
+}: {
+  sampled: number;
+  sitemapCount: number | null;
+  deepPages: number;
+  cta: string;
+}) {
+  // Sitemap URLs plus the homepage.
+  const total = sitemapCount === null ? null : sitemapCount + 1;
+  const share = total ? Math.min(100, Math.max(1, Math.round((sampled / total) * 100))) : null;
+  const deepCovers = total !== null && total <= deepPages ? `All ${total.toLocaleString("en-US")} pages` : `Up to ${deepPages} pages`;
+  return (
+    <section className="mt-4 rounded-2xl border border-line bg-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="font-semibold">
+          This score is an estimate from {sampled} pages{total && total > sampled ? ` out of ${total.toLocaleString("en-US")}` : ""}
+        </p>
+        {share !== null && <p className="text-sm text-muted">{share}% of your site seen</p>}
+      </div>
+      {share !== null ? (
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" aria-hidden>
+          <div className="h-full rounded-full bg-accent" style={{ width: `${share}%` }} />
+        </div>
+      ) : (
+        <p className="mt-1 text-sm text-muted">We found no sitemap, so we can&apos;t tell how much of your site that is.</p>
+      )}
+      <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+        <div className="rounded-xl border border-line p-4">
+          <p className="font-semibold">This Quick Check</p>
+          <ul className="mt-2 space-y-1.5 text-muted">
+            <li>{sampled} pages sampled, the rest extrapolated</li>
+            <li>Search Console shown below, not used in the score</li>
+          </ul>
+        </div>
+        <div className="rounded-xl border border-accent/40 bg-accent/5 p-4">
+          <p className="font-semibold text-accent">Deep Report</p>
+          <ul className="mt-2 space-y-1.5">
+            <li>{deepCovers} reviewed one by one</li>
+            <li>Search Console built into the score and the action plan</li>
+          </ul>
+        </div>
+      </div>
+      <a
+        href="#deep-report"
+        className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-strong print:hidden"
+      >
+        {cta}
+      </a>
+    </section>
+  );
+}
+
 export default function ReportPage({ params, searchParams }: PageProps<"/report/[id]">) {
   return (
     <Suspense
@@ -89,12 +157,16 @@ async function Report({
       ? `Get the Deep Report (${deepPrice}, ${pricing.promo.label} -${pricing.promo.percentOff}%)`
       : `Get the Deep Report (${deepPrice})`;
   const a = check.analysis;
+  // Pages of the site the Quick Check never saw (sitemap URLs plus the homepage).
+  const unseen = sitemapCount === null ? 0 : Math.max(0, sitemapCount + 1 - check.pagesAnalyzed);
+  const range = scoreRange(a?.riskScore ?? 0, check.pagesAnalyzed, sitemapCount);
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 sm:px-6">
       <p className="text-sm text-muted">
-        Quick Check · {check.pagesAnalyzed} pages sampled{check.metrics.sitemapUrlCount ? ` of ${check.metrics.sitemapUrlCount} in your sitemap` : ""} · {date}
+        Quick Check · {check.pagesAnalyzed}
+        {sitemapCount ? ` of ${(sitemapCount + 1).toLocaleString("en-US")}` : ""} pages sampled · {date}
       </p>
       <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{check.domain}</h1>
 
@@ -108,28 +180,26 @@ async function Report({
           <section className="sl-fade-up mt-8 flex flex-col gap-6 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center">
             <div className="shrink-0 text-center sm:w-40">
               <ScoreGauge score={a.riskScore} level={a.riskLevel} />
-              <p className="-mt-3 text-sm text-muted">risk score</p>
+              <p className="-mt-3 text-sm text-muted">estimated risk</p>
+              <p className="mt-1 text-xs tabular-nums text-muted">
+                rough range {range.low}–{range.high}
+              </p>
               <div className="mt-2">
                 <LevelBadge level={a.riskLevel} />
               </div>
             </div>
             <p className="sl-fade-up leading-relaxed [animation-delay:300ms]">{a.summary}</p>
           </section>
-          <p className="mt-3 rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
-            <span className="font-semibold text-foreground">This score is an estimate.</span> It&apos;s extrapolated
-            from {check.pagesAnalyzed} public pages
-            {check.metrics.sitemapUrlCount && check.metrics.sitemapUrlCount > check.pagesAnalyzed
-              ? ` out of ${check.metrics.sitemapUrlCount} in your sitemap`
-              : ""}
-            , and it doesn&apos;t use your Search Console data. The{" "}
-            <a href="#deep-report" className="text-accent underline">
-              Deep Report
-            </a>{" "}
-            reviews up to 500 pages with your Search Console data.
-          </p>
+          <Coverage
+            sampled={check.pagesAnalyzed}
+            sitemapCount={sitemapCount}
+            deepPages={tierMaxPages(tier)}
+            cta={deepReportEnabled() ? `See the Deep Report · ${deepPrice}` : "Join the Deep Report waitlist"}
+          />
 
           <section className="mt-12">
             <h2 className="text-2xl font-semibold tracking-tight">Top 3 things to fix</h2>
+            <p className="mt-1 text-sm text-muted">Based on the {check.pagesAnalyzed} sampled pages only.</p>
             <ol className="mt-6 space-y-4">
               {a.topIssues.map((t, i) => (
                 <li
@@ -149,6 +219,17 @@ async function Report({
                 </li>
               ))}
             </ol>
+            <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-dashed border-line p-5 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-muted">
+                {unseen > 0
+                  ? `These come from ${check.pagesAnalyzed} pages. The other ${unseen.toLocaleString("en-US")} ${unseen === 1 ? "page wasn't" : "pages weren't"} checked.`
+                  : `These come from a sample of ${check.pagesAnalyzed} pages.`}{" "}
+                The Deep Report reviews every page it covers and lists the exact ones to fix, in order.
+              </p>
+              <a href="#deep-report" className="shrink-0 font-semibold text-accent underline underline-offset-4 print:hidden">
+                Check every page →
+              </a>
+            </div>
           </section>
 
           <section className="mt-12">
@@ -197,6 +278,20 @@ async function Report({
             gsc={gsc}
             result={gscResult}
             enabled={gscEnabled()}
+            note={
+              gsc ? (
+                <>
+                  <span className="font-semibold text-foreground">Your Search Console data isn&apos;t used in this score.</span>{" "}
+                  It&apos;s shown here for information. The Deep Report crawls the pages that lost clicks and builds them into
+                  the score and the action plan.
+                </>
+              ) : (
+              <>
+                <span className="font-semibold text-foreground">Shown for information only:</span> these figures
+                aren&apos;t part of your Quick Check score. The Deep Report builds them into the score and the action plan.
+              </>
+              )
+            }
             upsell={
               <>
                 <p className="mt-2 text-muted">
@@ -216,11 +311,14 @@ async function Report({
       )}
 
       <section id="deep-report" className="mt-12 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
-        <h2 className="text-xl font-semibold">Want the full picture?</h2>
+        <h2 className="text-xl font-semibold">From an estimate to a diagnosis</h2>
         <p className="mt-2 text-muted">
-          This check estimated your risk from {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one
-          by one, adds the pages that lost clicks in Search Console to the analysis, and gives you a prioritized
-          action plan with the exact pages to fix.
+          This check estimated your risk from {check.pagesAnalyzed} pages. The Deep Report reviews{" "}
+          {sitemapCount !== null && sitemapCount + 1 <= tierMaxPages(tier)
+            ? `all ${(sitemapCount + 1).toLocaleString("en-US")} pages of your site`
+            : `up to ${tierMaxPages(tier)} pages`}{" "}
+          one by one, builds your Search Console data into the score, and gives you a prioritized action plan with the
+          exact pages to fix.
         </p>
         <div className="mt-5 max-w-md">
           {deepReportEnabled() ? (

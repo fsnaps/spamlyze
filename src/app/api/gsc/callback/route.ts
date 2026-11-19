@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/firebase-admin";
 import { getCheck } from "@/lib/check/run";
@@ -55,6 +55,12 @@ export async function GET(request: NextRequest) {
         gsc: { ...gsc, losers: gsc.losers ? { update: gsc.losers.update, pages: [] } : null },
         expiresAt: Timestamp.fromMillis(Date.now() + QUICK_IMPORT_DAYS * 86_400_000),
       });
+    // Admin only: shows which Quick Checks had Search Console connected.
+    await db()
+      .collection("checks")
+      .doc(id)
+      .update({ gscConnectedAt: FieldValue.serverTimestamp() })
+      .catch(() => {});
     return back("connected", `&g=${importId}`);
   } catch (err) {
     console.error("gsc import failed", target, err instanceof Error ? err.message : err);

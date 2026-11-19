@@ -2,7 +2,9 @@ import "server-only";
 import { clientIp } from "@/lib/check/guard";
 import { getApiAccount, type ApiAccount } from "./accounts";
 import { apiEnabled } from "./config";
+import type { CreditError } from "./credits";
 import { ApiConfigError, findApiKey, touchApiKey, type ApiKeyDoc } from "./keys";
+import { RATE_PER_MINUTE, takeRate } from "./rate-limit";
 
 export type ApiContext = {
   accountId: string;
@@ -41,6 +43,12 @@ export async function authenticate(request: Request): Promise<ApiContext | Respo
     if (account.status !== "active") {
       return apiError(403, "account_suspended", "This account is suspended. Contact hello@spamlyze.com.");
     }
+    const rate = await takeRate(found.keyId);
+    if (!rate.ok) {
+      return apiError(429, "rate_limited", `Too many requests: ${RATE_PER_MINUTE()} per minute per key.`, {
+        "retry-after": String(rate.retryAfter),
+      });
+    }
     const ip = clientIp(request.headers);
     await touchApiKey(found.keyId, found.data, ip);
     return { accountId: found.data.accountId, account, keyId: found.keyId, key: found.data, ip };
@@ -49,4 +57,11 @@ export async function authenticate(request: Request): Promise<ApiContext | Respo
     else console.error("API auth failed", err);
     return apiError(503, "unavailable", "The API is temporarily unavailable. Please try again later.");
   }
+}
+
+/** Maps a credits failure to its API error (402 for money, 429 for the daily cap). */
+export function creditErrorResponse(err: CreditError): Response {
+  if (err.code === "insufficient_credits") return apiError(402, err.code, err.message);
+  if (err.code === "daily_cap_reached") return apiError(429, err.code, err.message);
+  return apiError(401, "invalid_api_key", "This API key is invalid or has been revoked.");
 }

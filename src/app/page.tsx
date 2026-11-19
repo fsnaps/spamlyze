@@ -75,7 +75,7 @@ const faqs = [
   },
   {
     q: "Is there an API?",
-    a: "It's coming on December 1, 2026, for agencies and tools that want to run Quick Checks and Deep Reports from their own stack, with prepaid credits. Join the API list below for early access.",
+    a: "It's coming on December 1, 2026, for agencies and tools that want to run Quick Checks and Deep Reports from their own stack, with prepaid credits. It will also come with an MCP server, so AI assistants like Claude or ChatGPT can run checks for you, and it plugs into Zapier or n8n. Join the API list above for early access.",
   },
 ];
 
@@ -269,8 +269,8 @@ function CompareSection() {
 function ApiTeaser() {
   return (
     <section id="api" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 sm:px-6">
-      <div className="grid gap-8 rounded-2xl border border-line bg-surface p-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
-        <div>
+      <div className="grid grid-cols-1 gap-8 rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+        <div className="min-w-0">
           <p className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent">
             Coming December 1
           </p>
@@ -279,6 +279,20 @@ function ApiTeaser() {
             For agencies and SEO tools: run Quick Checks and Deep Reports for your clients from your own stack, and get
             the results as JSON. Prepaid credits, no subscription.
           </p>
+          <ul className="mt-4 space-y-2 text-sm">
+            <li>
+              <span className="font-semibold">Works with your AI assistant.</span>{" "}
+              <span className="text-muted">
+                An MCP server lets Claude, ChatGPT and other assistants run checks for you, no code needed.
+              </span>
+            </li>
+            <li>
+              <span className="font-semibold">Automate it.</span>{" "}
+              <span className="text-muted">
+                Plug it into your scripts, Zapier or n8n, and check every client site each week without lifting a finger.
+              </span>
+            </li>
+          </ul>
           <pre className="mt-5 overflow-x-auto rounded-xl border border-line bg-background p-4 text-xs leading-relaxed">
             <code>{`POST /v1/quick-checks
 { "url": "https://example.com" }

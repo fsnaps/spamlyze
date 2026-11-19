@@ -1,7 +1,9 @@
 import { connection, NextResponse, type NextRequest } from "next/server";
 import { getCheck } from "@/lib/check/run";
 import { getDeepReport, isDeepId } from "@/lib/deep/job";
+import { noteGsc } from "@/lib/gsc/activity";
 import { authUrl, gscEnabled, makeState, NONCE_COOKIE } from "@/lib/gsc/oauth";
+import { track } from "@/lib/stats";
 
 const notFound = () => NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -23,6 +25,8 @@ export async function GET(request: NextRequest) {
     if (!(await getCheck(id))) return notFound();
     target = `c~${id}`;
   }
+  const [kind, id] = target.split("~") as ["c" | "d", string];
+  await Promise.all([noteGsc(kind, id, "start"), track({ gscStarts: 1 })]);
   const { state, nonce } = makeState(target);
   const res = NextResponse.redirect(authUrl(state));
   res.cookies.set(NONCE_COOKIE, nonce, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 600, path: "/api/gsc" });

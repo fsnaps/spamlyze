@@ -17,6 +17,8 @@ export const STAT_KEYS = [
   "signupsMonitoring",
   "signupsApi",
   "gscConnected",
+  "gscStarts",
+  "gscFailed",
   "haikuInputTokens",
   "haikuOutputTokens",
   "opusInputTokens",

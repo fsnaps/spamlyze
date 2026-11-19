@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/firebase-admin";
 import { getCheck } from "@/lib/check/run";
 import { attachSearchConsole, getDeepReport } from "@/lib/deep/job";
+import { noteGsc } from "@/lib/gsc/activity";
 import { findProperty, GscError, importSearchData } from "@/lib/gsc/data";
 import { exchangeCode, GSC_SCOPE, NONCE_COOKIE, readState, revoke } from "@/lib/gsc/oauth";
 import { site } from "@/lib/site";
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest) {
   if (!id || (kind !== "d" && kind !== "c")) return NextResponse.redirect(`${site.url}/?gsc=expired`);
 
   const page = kind === "d" ? `/deep/${id}` : `/report/${id}`;
-  const back = (result: string, extra = "") => {
+  const back = async (result: "connected" | "denied" | "no_property" | "error", extra = "") => {
+    if (result !== "connected") await Promise.all([noteGsc(kind, id, result), track({ gscFailed: 1 })]);
     const res = NextResponse.redirect(`${site.url}${page}?gsc=${result}${extra}#search-console`);
     res.cookies.delete({ name: NONCE_COOKIE, path: "/api/gsc" });
     return res;

@@ -71,7 +71,11 @@ async function Dashboard() {
           value={String(t.signupsWaitlist + t.signupsReport)}
           hint={`${t.signupsReport} from reports`}
         />
-        <Tile label="Monitoring interest" value={String(t.signupsMonitoring)} hint={`${t.gscConnected} Search Console imports`} />
+        <Tile
+          label="Monitoring / API interest"
+          value={`${t.signupsMonitoring} / ${t.signupsApi}`}
+          hint={`${t.gscConnected} Search Console imports`}
+        />
         <Tile label="Cached checks" value={String(t.quickChecksCached)} hint="same domain within 24 h" />
         <Tile
           label="Errors"
@@ -103,7 +107,7 @@ async function Dashboard() {
                 <td className="px-4 py-2">{usd((d.revenueCents ?? 0) / 100)}</td>
                 <td className="px-4 py-2">{usd(apiCostUsd(d))}</td>
                 <td className="px-4 py-2">
-                  {(d.signupsWaitlist ?? 0) + (d.signupsReport ?? 0) + (d.signupsMonitoring ?? 0)}
+                  {(d.signupsWaitlist ?? 0) + (d.signupsReport ?? 0) + (d.signupsMonitoring ?? 0) + (d.signupsApi ?? 0)}
                 </td>
               </tr>
             ))}

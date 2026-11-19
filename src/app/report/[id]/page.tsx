@@ -111,6 +111,18 @@ async function Report({
             </div>
             <p className="sl-fade-up leading-relaxed [animation-delay:300ms]">{a.summary}</p>
           </section>
+          <p className="mt-3 rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+            <span className="font-semibold text-foreground">This score is an estimate.</span> It&apos;s extrapolated
+            from {check.pagesAnalyzed} public pages
+            {check.metrics.sitemapUrlCount && check.metrics.sitemapUrlCount > check.pagesAnalyzed
+              ? ` out of ${check.metrics.sitemapUrlCount} in your sitemap`
+              : ""}
+            , and it doesn&apos;t use your Search Console data. The{" "}
+            <a href="#deep-report" className="text-accent underline">
+              Deep Report
+            </a>{" "}
+            reviews up to 500 pages with your Search Console data.
+          </p>
 
           <section className="mt-12">
             <h2 className="text-2xl font-semibold tracking-tight">Top 3 things to fix</h2>
@@ -202,9 +214,9 @@ async function Report({
       <section id="deep-report" className="mt-12 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
-          This check looked at {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one by one, shows
-          which pages lost clicks after each update with Search Console, and gives you a prioritized action plan with
-          the exact pages to fix.
+          This check estimated your risk from {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one
+          by one, adds the pages that lost clicks in Search Console to the analysis, and gives you a prioritized
+          action plan with the exact pages to fix.
         </p>
         <div className="mt-5 max-w-md">
           {deepReportEnabled() ? (
@@ -224,7 +236,7 @@ async function Report({
       </section>
 
       <p className="mt-8 text-xs text-muted">
-        This is an estimate based on a small sample of public pages. It is not a guarantee, and Spamlyze is not
+        This is an estimate extrapolated from a small sample of public pages. It is not a guarantee, and Spamlyze is not
         affiliated with Google.
       </p>
     </main>

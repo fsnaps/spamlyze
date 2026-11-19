@@ -7,6 +7,9 @@
 //   list-keys <accountId>
 //   revoke-key <keyId>
 //   show <accountId>
+//   add-credits <accountId> <usd> "<note>"     manual top-up (pilot: after a bank transfer or Stripe link)
+//   ledger <accountId>                         last 50 credit movements
+//   set-cap <accountId> <usd>                  daily spending cap
 process.env.GOOGLE_CLOUD_PROJECT ??= "spamlyze";
 if (!process.env.FIRESTORE_EMULATOR_HOST && !process.env.API_KEY_PEPPER) {
   console.error("Set API_KEY_PEPPER to the value of the App Hosting secret, or keys won't match production.");
@@ -17,6 +20,13 @@ if (!process.env.FIRESTORE_EMULATOR_HOST && !process.env.API_KEY_PEPPER) {
 
 const { createApiAccount, getApiAccount } = await import("../src/lib/api/accounts");
 const { createApiKey, listApiKeys, revokeApiKey } = await import("../src/lib/api/keys");
+const { addCredits, listLedger } = await import("../src/lib/api/credits");
+const { accounts } = await import("../src/lib/api/accounts");
+const toCents = (usd: string | undefined) => {
+  const cents = Math.round(Number(usd) * 100);
+  if (!Number.isInteger(cents) || cents <= 0) throw new Error(`invalid amount in USD: ${usd}`);
+  return cents;
+};
 
 const [cmd, ...args] = process.argv.slice(2);
 const positional = args.filter((a) => !a.startsWith("--"));
@@ -51,7 +61,28 @@ switch (cmd) {
     console.log(await getApiAccount(positional[0] ?? ""));
     break;
   }
+  case "add-credits": {
+    const [accountId, amount, note = ""] = positional;
+    const r = await addCredits(accountId ?? "", toCents(amount), "manual", `manual_${Date.now()}`, note);
+    console.log(`Added $${amount}. New balance: $${(r.balanceCents / 100).toFixed(2)}`);
+    break;
+  }
+  case "ledger": {
+    for (const e of await listLedger(positional[0] ?? "")) {
+      const amt = `${e.cents > 0 ? "+" : ""}${(e.cents / 100).toFixed(2)}`;
+      console.log(
+        `${e.createdAt?.toDate().toISOString()}  ${e.type.padEnd(6)}  ${amt.padStart(9)}  balance ${(e.balanceAfter / 100).toFixed(2)}  ${e.reason} ${e.ref}${e.note ? `  "${e.note}"` : ""}`,
+      );
+    }
+    break;
+  }
+  case "set-cap": {
+    const [accountId, amount] = positional;
+    await accounts().doc(accountId ?? "").update({ dailySpendCapCents: toCents(amount) });
+    console.log(`Daily cap set to $${amount}.`);
+    break;
+  }
   default:
-    console.log("Commands: create-account, create-key, list-keys, revoke-key, show (see the top of scripts/api-admin.mts)");
+    console.log("Commands: create-account, create-key, list-keys, revoke-key, show, add-credits, ledger, set-cap (see the top of scripts/api-admin.mts)");
 }
 process.exit(0);

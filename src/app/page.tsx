@@ -250,14 +250,14 @@ function CompareSection() {
         <div className="grid grid-cols-[1fr_1fr] border-b border-line text-sm font-semibold sm:grid-cols-[1.1fr_1fr_1fr]">
           <span className="hidden px-5 py-3 text-muted sm:block" />
           <span className="px-5 py-3">Quick Check · free</span>
-          <span className="bg-accent/5 px-5 py-3 text-accent">Deep Report</span>
+          <span className="px-5 py-3 text-accent sm:bg-accent/5">Deep Report</span>
         </div>
         <dl className="divide-y divide-line text-sm">
           {COMPARE.map((row) => (
             <div key={row.label} className="grid grid-cols-[1fr_1fr] sm:grid-cols-[1.1fr_1fr_1fr]">
               <dt className="col-span-2 px-5 pb-1 pt-3 font-semibold sm:col-span-1 sm:py-3">{row.label}</dt>
               <dd className="px-5 pb-3 text-muted sm:py-3">{row.quick}</dd>
-              <dd className="bg-accent/5 px-5 pb-3 sm:py-3">{row.deep}</dd>
+              <dd className="px-5 pb-3 font-medium sm:bg-accent/5 sm:py-3 sm:font-normal">{row.deep}</dd>
             </div>
           ))}
         </dl>

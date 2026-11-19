@@ -56,8 +56,15 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Priced by site size: up to 100 pages (small) or up to 500 pages (large), counted
+  # from the sitemap at checkout.
+  - variable: DEEP_REPORT_SMALL_PRICE_CENTS
+    value: "1900"
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: DEEP_REPORT_PRICE_CENTS
-    value: "4900"
+    value: "3900"
     availability:
       - BUILD
       - RUNTIME
@@ -69,7 +76,7 @@ env:
       - BUILD
       - RUNTIME
   - variable: PROMO_PERCENT_OFF
-    value: "40"
+    value: "25"
     availability:
       - BUILD
       - RUNTIME

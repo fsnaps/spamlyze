@@ -11,6 +11,13 @@ export type DeepReport = {
   phase: DeepPhase;
   inputUrl: string;
   domain: string;
+  /** Size tier paid for, and the page cap it buys (homepage included). Absent on reports before tiers: 500 pages. */
+  tier?: "small" | "large";
+  maxPages?: number;
+  /** What the buyer was charged, in cents, before any Stripe promotion code. */
+  priceCents?: number;
+  /** URLs counted in the sitemap at checkout, null when there was none. */
+  sitemapUrlCountAtCheckout?: number | null;
   createdAt: FirebaseFirestore.Timestamp;
   paidAt?: FirebaseFirestore.Timestamp;
   finishedAt?: FirebaseFirestore.Timestamp;

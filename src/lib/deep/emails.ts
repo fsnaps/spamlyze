@@ -23,14 +23,14 @@ export function reportLink(id: string) {
   return `${site.url}/deep/${id}`;
 }
 
-export function sendDeepStarted(to: string, id: string, domain: string) {
+export function sendDeepStarted(to: string, id: string, domain: string, maxPages = 500) {
   const d = escape(domain);
   return sendEmail(
     to,
     `Your Deep Report for ${domain} is on its way`,
     layout(
       `Thanks! Your Deep Report for ${d} is starting`,
-      `<p style="margin:0 0 12px;line-height:1.6;color:#57534e">We're reviewing up to 500 pages of ${d} one by one. It takes 5 to 15 minutes while the report page is open.</p>
+      `<p style="margin:0 0 12px;line-height:1.6;color:#57534e">We're reviewing up to ${maxPages} pages of ${d} one by one. It takes 5 to 15 minutes while the report page is open.</p>
 <p style="margin:0;line-height:1.6;color:#57534e">If you closed the page, open the link below: the analysis picks up where it left off. Keep this email to find your report again.</p>`,
       reportLink(id),
       "Follow your report",

@@ -71,7 +71,7 @@ const faqs = [
   },
   {
     q: "What's in the Deep Report?",
-    a: "Up to 500 pages reviewed one by one, your Search Console data built into the analysis, a risk score for each spam policy, a prioritized action plan with the exact pages to fix, and a PDF export. It's a one-time payment, refunded in full if we can't analyze your site.",
+    a: "Up to 500 pages reviewed one by one, your Search Console data built into the analysis, a risk score for each spam policy, a prioritized action plan with the exact pages to fix, and a PDF export. It's a one-time payment, priced by size: one price up to 100 pages, another up to 500. We count the pages in your sitemap before checkout, and you get a full refund if we can't analyze your site.",
   },
   {
     q: "Is there an API?",
@@ -100,7 +100,7 @@ export default function Home() {
         <p className="mt-2 max-w-3xl text-sm text-muted">
           The free check is an estimate from 15 sampled pages. For a real diagnosis,{" "}
           <a href="#deep-report" className="font-medium text-foreground underline decoration-accent underline-offset-4">
-            get the Deep Report: 500 pages plus your Search Console data, for <DeepPriceText />
+            get the Deep Report: up to 500 pages plus your Search Console data, <DeepPriceText />
           </a>
         </p>
       </section>
@@ -160,7 +160,7 @@ export default function Home() {
             <h3 className="text-xl font-semibold">Deep Report</h3>
             <DeepPriceLarge />
             <ul className="mt-6 space-y-2 text-muted">
-              <li>Up to 500 pages analyzed one by one</li>
+              <li>Up to 100 or 500 pages analyzed one by one, depending on your site&apos;s size</li>
               <li>Search Console built in: the pages that lost clicks are added and reviewed</li>
               <li>Risk score and findings for every spam policy</li>
               <li>Prioritized action plan with the pages to fix</li>
@@ -223,7 +223,7 @@ export default function Home() {
 }
 
 const COMPARE: { label: string; quick: string; deep: string }[] = [
-  { label: "Pages analyzed", quick: "A sample of 15", deep: "Up to 500, one by one" },
+  { label: "Pages analyzed", quick: "A sample of 15", deep: "Up to 100 or 500 by site size, one by one" },
   {
     label: "Data used",
     quick: "Public pages only",

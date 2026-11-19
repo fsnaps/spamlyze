@@ -34,17 +34,17 @@ const steps = [
   {
     n: "1",
     title: "Enter your URL",
-    body: "We crawl a sample of your pages. No sign-up needed for the free check.",
+    body: "The free Quick Check samples 15 public pages. No sign-up needed.",
   },
   {
     n: "2",
-    title: "Get your risk score",
-    body: "Each spam signal is scored, with the pages that trigger it.",
+    title: "Get an estimated risk score",
+    body: "We extrapolate from that sample: a fast first read, not a diagnosis.",
   },
   {
     n: "3",
     title: "Fix what matters first",
-    body: "The Deep Report gives you a prioritized, page-by-page action plan.",
+    body: "The Deep Report reviews up to 500 pages with your Search Console data and gives you a page-by-page action plan.",
   },
 ];
 
@@ -54,8 +54,12 @@ const faqs = [
     a: "No. Nobody outside Google can. Spamlyze shows you the patterns spam policies target, so you can fix them before or after an update.",
   },
   {
+    q: "How accurate is the free Quick Check?",
+    a: "It's an estimate. We look at a sample of 15 public pages and extrapolate to the whole site, so it can miss problems on pages we didn't see, and it doesn't use your Search Console data. Use it as a first read. The Deep Report reviews up to 500 pages one by one and folds in your Search Console data, including the pages that actually lost clicks.",
+  },
+  {
     q: "Do I need to connect Search Console?",
-    a: "No, the free check only needs your URL. Connecting Search Console is optional and free: it shows whether your clicks actually dropped after each Google update. The Deep Report also lists the pages that lost the most clicks.",
+    a: "No, the free check only needs your URL. Connecting Search Console is optional and free: it shows whether your clicks actually dropped after each Google update. In the Deep Report, the pages that lost the most clicks are added to the analysis and reviewed one by one.",
   },
   {
     q: "What do you do with my Search Console data?",
@@ -67,7 +71,11 @@ const faqs = [
   },
   {
     q: "What's in the Deep Report?",
-    a: "Up to 500 pages reviewed one by one, a risk score for each spam policy, a prioritized action plan with the exact pages to fix, and a PDF export. It's a one-time payment, refunded in full if we can't analyze your site.",
+    a: "Up to 500 pages reviewed one by one, your Search Console data built into the analysis, a risk score for each spam policy, a prioritized action plan with the exact pages to fix, and a PDF export. It's a one-time payment, priced by size: one price up to 100 pages, another up to 500. We count the pages in your sitemap before checkout, and you get a full refund if we can't analyze your site.",
+  },
+  {
+    q: "Is there an API?",
+    a: "It's coming on December 1, 2026, for agencies and tools that want to run Quick Checks and Deep Reports from their own stack, with prepaid credits. It will also come with an MCP server, so AI assistants like Claude or ChatGPT can run checks for you, and it plugs into Zapier or n8n. Join the API list above for early access.",
   },
 ];
 
@@ -89,10 +97,10 @@ export default function Home() {
         <div className="mt-10 max-w-3xl">
           <QuickCheckForm />
         </div>
-        <p className="mt-2 text-sm text-muted">
-          Need the full picture?{" "}
+        <p className="mt-2 max-w-3xl text-sm text-muted">
+          The free check is an estimate from 15 sampled pages. For a real diagnosis,{" "}
           <a href="#deep-report" className="font-medium text-foreground underline decoration-accent underline-offset-4">
-            Get the Deep Report: 500 pages and an action plan for <DeepPriceText />
+            get the Deep Report: up to 500 pages plus your Search Console data, <DeepPriceText />
           </a>
         </p>
       </section>
@@ -128,6 +136,8 @@ export default function Home() {
         </div>
       </section>
 
+      <CompareSection />
+
       <section id="deep-report" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 sm:px-6">
         <h2 className="text-3xl font-semibold tracking-tight">Plans</h2>
         <div className="mt-10 grid gap-4 lg:grid-cols-3">
@@ -136,9 +146,10 @@ export default function Home() {
             <p className="mt-1 text-3xl font-semibold">Free</p>
             <ul className="mt-6 space-y-2 text-muted">
               <li>Your URL is all we need</li>
-              <li>Spam risk score across 6 signals</li>
+              <li>A sample of 15 public pages</li>
+              <li>Estimated risk score, extrapolated from that sample</li>
               <li>Top 3 issues with example pages</li>
-              <li>Search Console traffic check around each update</li>
+              <li>Search Console traffic chart around each update</li>
               <li>Results in about 30 seconds</li>
             </ul>
           </div>
@@ -149,10 +160,10 @@ export default function Home() {
             <h3 className="text-xl font-semibold">Deep Report</h3>
             <DeepPriceLarge />
             <ul className="mt-6 space-y-2 text-muted">
-              <li>Up to 500 pages analyzed one by one</li>
+              <li>Up to 100 or 500 pages analyzed one by one, depending on your site&apos;s size</li>
+              <li>Search Console built in: the pages that lost clicks are added and reviewed</li>
               <li>Risk score and findings for every spam policy</li>
               <li>Prioritized action plan with the pages to fix</li>
-              <li>Search Console: the exact pages that lost clicks after each update</li>
               <li>PDF export</li>
               <li>Full refund if we can&apos;t analyze your site</li>
             </ul>
@@ -182,6 +193,8 @@ export default function Home() {
         </div>
       </section>
 
+      <ApiTeaser />
+
       <section className="border-t border-line bg-surface">
         <div className="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6">
           <h2 className="text-3xl font-semibold tracking-tight">Questions</h2>
@@ -206,6 +219,96 @@ export default function Home() {
         </div>
       </section>
     </main>
+  );
+}
+
+const COMPARE: { label: string; quick: string; deep: string }[] = [
+  { label: "Pages analyzed", quick: "A sample of 15", deep: "Up to 100 or 500 by site size, one by one" },
+  {
+    label: "Data used",
+    quick: "Public pages only",
+    deep: "Public pages plus your Search Console clicks and impressions",
+  },
+  {
+    label: "Pages that lost traffic",
+    quick: "Not used in the score",
+    deep: "Added to the crawl and reviewed first",
+  },
+  { label: "Risk score", quick: "Extrapolated from the sample", deep: "Built from every page reviewed" },
+  { label: "What you get", quick: "Top 3 issues", deep: "Prioritized action plan with the exact pages, PDF export" },
+];
+
+function CompareSection() {
+  return (
+    <section className="mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6">
+      <h2 className="text-3xl font-semibold tracking-tight">An estimate, or a diagnosis</h2>
+      <p className="mt-3 max-w-2xl text-muted">
+        The Quick Check extrapolates from very little data, on purpose: it&apos;s free and takes 30 seconds. The Deep
+        Report looks at your whole site and at what actually happened to your traffic.
+      </p>
+      <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="grid grid-cols-[1fr_1fr] border-b border-line text-sm font-semibold sm:grid-cols-[1.1fr_1fr_1fr]">
+          <span className="hidden px-5 py-3 text-muted sm:block" />
+          <span className="px-5 py-3">Quick Check · free</span>
+          <span className="px-5 py-3 text-accent sm:bg-accent/5">Deep Report</span>
+        </div>
+        <dl className="divide-y divide-line text-sm">
+          {COMPARE.map((row) => (
+            <div key={row.label} className="grid grid-cols-[1fr_1fr] sm:grid-cols-[1.1fr_1fr_1fr]">
+              <dt className="col-span-2 px-5 pb-1 pt-3 font-semibold sm:col-span-1 sm:py-3">{row.label}</dt>
+              <dd className="px-5 pb-3 text-muted sm:py-3">{row.quick}</dd>
+              <dd className="px-5 pb-3 font-medium sm:bg-accent/5 sm:py-3 sm:font-normal">{row.deep}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function ApiTeaser() {
+  return (
+    <section id="api" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 sm:px-6">
+      <div className="grid grid-cols-1 gap-8 rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+        <div className="min-w-0">
+          <p className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent">
+            Coming December 1
+          </p>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">The Spamlyze API</h2>
+          <p className="mt-3 leading-relaxed text-muted">
+            For agencies and SEO tools: run Quick Checks and Deep Reports for your clients from your own stack, and get
+            the results as JSON. Prepaid credits, no subscription.
+          </p>
+          <ul className="mt-4 space-y-2 text-sm">
+            <li>
+              <span className="font-semibold">Works with your AI assistant.</span>{" "}
+              <span className="text-muted">
+                An MCP server lets Claude, ChatGPT and other assistants run checks for you, no code needed.
+              </span>
+            </li>
+            <li>
+              <span className="font-semibold">Automate it.</span>{" "}
+              <span className="text-muted">
+                Plug it into your scripts, Zapier or n8n, and check every client site each week without lifting a finger.
+              </span>
+            </li>
+          </ul>
+          <pre className="mt-5 overflow-x-auto rounded-xl border border-line bg-background p-4 text-xs leading-relaxed">
+            <code>{`POST /v1/quick-checks
+{ "url": "https://example.com" }
+
+→ { "riskScore": 34, "riskLevel": "moderate", ... }`}</code>
+          </pre>
+        </div>
+        <div>
+          <p className="text-sm font-semibold">Get early access</p>
+          <p className="mt-1 text-sm text-muted">One email when the API opens, with the docs and pricing.</p>
+          <div className="mt-4">
+            <WaitlistForm source="api" compact cta="Notify me" />
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -236,7 +339,8 @@ function GscShowcase() {
             <li>
               <span className="font-semibold">In the Deep Report:</span>{" "}
               <span className="text-muted">
-                the exact pages that lost clicks, plus up to 500 pages reviewed and a prioritized action plan.
+                your Search Console data feeds the analysis. The pages that lost clicks are crawled and reviewed with up
+                to 500 others, and the action plan starts with them.
               </span>
             </li>
             <li>

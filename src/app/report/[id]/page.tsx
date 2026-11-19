@@ -6,7 +6,7 @@ import { ScoreGauge } from "@/components/score-gauge";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { DeepCheckout } from "@/components/deep-checkout";
 import { deepPricingNow, deepReportEnabled } from "@/lib/deep/config";
-import { formatUsd } from "@/lib/pricing";
+import { formatUsd, LARGE_TIER_MAX_PAGES, tierFor, tierMaxPages } from "@/lib/pricing";
 import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
@@ -77,8 +77,12 @@ async function Report({
   if (!check) notFound();
   const gsc = await getQuickImport(typeof query.g === "string" ? query.g : undefined, id);
   const gscResult = typeof query.gsc === "string" ? query.gsc : undefined;
-  const pricing = await deepPricingNow();
+  // The Quick Check already counted the sitemap: price the Deep Report for this site's size.
+  const sitemapCount = check.metrics.sitemapUrlCount;
+  const tier = tierFor(sitemapCount);
+  const pricing = await deepPricingNow(tier);
   const deepPrice = formatUsd(pricing.cents);
+  const largePricing = sitemapCount === null && tier === "small" ? await deepPricingNow("large") : null;
   const deepCta = !deepReportEnabled()
     ? "Join the Deep Report waitlist"
     : pricing.promo
@@ -111,6 +115,18 @@ async function Report({
             </div>
             <p className="sl-fade-up leading-relaxed [animation-delay:300ms]">{a.summary}</p>
           </section>
+          <p className="mt-3 rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+            <span className="font-semibold text-foreground">This score is an estimate.</span> It&apos;s extrapolated
+            from {check.pagesAnalyzed} public pages
+            {check.metrics.sitemapUrlCount && check.metrics.sitemapUrlCount > check.pagesAnalyzed
+              ? ` out of ${check.metrics.sitemapUrlCount} in your sitemap`
+              : ""}
+            , and it doesn&apos;t use your Search Console data. The{" "}
+            <a href="#deep-report" className="text-accent underline">
+              Deep Report
+            </a>{" "}
+            reviews up to 500 pages with your Search Console data.
+          </p>
 
           <section className="mt-12">
             <h2 className="text-2xl font-semibold tracking-tight">Top 3 things to fix</h2>
@@ -202,13 +218,24 @@ async function Report({
       <section id="deep-report" className="mt-12 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
         <h2 className="text-xl font-semibold">Want the full picture?</h2>
         <p className="mt-2 text-muted">
-          This check looked at {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one by one, shows
-          which pages lost clicks after each update with Search Console, and gives you a prioritized action plan with
-          the exact pages to fix.
+          This check estimated your risk from {check.pagesAnalyzed} pages. The Deep Report reviews up to 500 pages one
+          by one, adds the pages that lost clicks in Search Console to the analysis, and gives you a prioritized
+          action plan with the exact pages to fix.
         </p>
         <div className="mt-5 max-w-md">
           {deepReportEnabled() ? (
-            <DeepCheckout url={check.url} price={deepPrice} />
+            <>
+              <p className="mb-3 text-sm text-muted">
+                {sitemapCount === null
+                  ? `We found no sitemap, so this price covers up to ${tierMaxPages(tier)} pages.`
+                  : `Your sitemap lists ${sitemapCount.toLocaleString("en-US")} pages: this price covers up to ${tierMaxPages(tier)} pages.`}
+              </p>
+              <DeepCheckout
+                url={check.url}
+                price={deepPrice}
+                largeOption={largePricing ? { pages: LARGE_TIER_MAX_PAGES, price: formatUsd(largePricing.cents) } : undefined}
+              />
+            </>
           ) : (
             <WaitlistForm source="report" site={check.domain} cta="Notify me at launch" />
           )}
@@ -224,7 +251,7 @@ async function Report({
       </section>
 
       <p className="mt-8 text-xs text-muted">
-        This is an estimate based on a small sample of public pages. It is not a guarantee, and Spamlyze is not
+        This is an estimate extrapolated from a small sample of public pages. It is not a guarantee, and Spamlyze is not
         affiliated with Google.
       </p>
     </main>

@@ -53,7 +53,7 @@ export async function joinWaitlist(
           email,
           ...(site ? { site } : {}),
           source,
-          interests: FieldValue.arrayUnion(source === "monitoring" ? "monitoring" : "deep_report"),
+          interests: FieldValue.arrayUnion(source === "monitoring" || source === "api" ? source : "deep_report"),
           createdAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -67,10 +67,12 @@ export async function joinWaitlist(
   }
 
   await Promise.all([
-    addToBrevoWaitlist(email, source === "monitoring" ? "monitoring" : "waitlist"),
+    addToBrevoWaitlist(email, source === "monitoring" || source === "api" ? source : "waitlist"),
     track(
       source === "monitoring"
         ? { signupsMonitoring: 1 }
+        : source === "api"
+          ? { signupsApi: 1 }
         : source === "report"
           ? { signupsReport: 1 }
           : { signupsWaitlist: 1 },
@@ -82,6 +84,8 @@ export async function joinWaitlist(
     message:
       source === "monitoring"
         ? "Thanks! We'll email you as soon as Monitoring opens."
+        : source === "api"
+          ? "Thanks! We'll email you when the API opens, with early access details."
         : "You're on the list. We'll email you when the next spam update rolls out.",
   };
 }

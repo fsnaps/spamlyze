@@ -105,10 +105,10 @@ async function DeepView({
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 sm:px-6">
-      <p className="text-sm text-muted">Deep Report</p>
+      <p className="text-sm text-muted">Deep Report{report.maxPages ? ` · up to ${report.maxPages} pages` : ""}</p>
       <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{report.domain}</h1>
       {report.status !== "awaiting_payment" && typeof sessionId === "string" && (
-        <PurchaseTracker id={id} value={deepPricing().cents / 100} />
+        <PurchaseTracker id={id} value={(report.priceCents ?? deepPricing().cents) / 100} />
       )}
       <div className="mt-8">
         {report.status === "awaiting_payment" ? (

@@ -105,8 +105,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 const { attachSearchConsole, createDeepReport, getDeepPages, getDeepReport, runStep } = await import("../src/lib/deep/job");
 const { db } = await import("../src/lib/firebase-admin");
 
-async function startPaid(url: string) {
-  const id = await createDeepReport(new URL(url));
+async function startPaid(url: string, plan: Parameters<typeof createDeepReport>[1] = {}) {
+  const id = await createDeepReport(new URL(url), plan);
   assert.equal((await getDeepReport(id))!.status, "awaiting_payment");
   // Steps do nothing until the payment is confirmed.
   assert.equal((await runStep(id))!.phase, "discover");
@@ -223,6 +223,34 @@ const pending = losses.slice(0, 7).filter((l) => !crawledKeys.has(pageKey(l.url)
 assert.deepEqual(r.urls!.slice(41, 41 + pending.length), pending, "losing pages not crawled yet go next");
 assert.equal(new Set(r.urls!.map(pageKey)).size, r.urls!.length, "no duplicates");
 assert.equal(r.crawlCursor, 41);
+
+// Small tier: the crawl stops at the tier's page cap, homepage included.
+const small = await startPaid("https://shop.test/", { tier: "small", maxPages: 30, priceCents: 1400 });
+r = (await runStep(small))!; // discover
+assert.equal(r.urls!.length, 30, "capped at the tier's pages");
+assert.equal(r.priceCents, 1400);
+
+// Pricing tiers
+const { tierFor, deepPricing } = await import("../src/lib/pricing");
+assert.equal(tierFor(99), "small", "99 sitemap URLs + homepage = 100 pages");
+assert.equal(tierFor(100), "large");
+assert.equal(tierFor(null), "small", "no sitemap: small by default");
+assert.equal(tierFor(null, true), "large", "the buyer can pick the large tier");
+assert.equal(tierFor(20, true), "large");
+Object.assign(process.env, {
+  DEEP_REPORT_SMALL_PRICE_CENTS: "1900",
+  DEEP_REPORT_PRICE_CENTS: "3900",
+  PROMO_PERCENT_OFF: "25",
+  PROMO_STARTS_AT: "2026-11-16T00:00:00+01:00",
+  PROMO_ENDS_AT: "2026-12-01T00:00:00+01:00",
+});
+const during = Date.parse("2026-11-30T23:59:00+01:00");
+const after = Date.parse("2026-12-01T00:00:00+01:00");
+assert.equal(deepPricing(during, "small").cents, 1400, "$19 at -25% is $14");
+assert.equal(deepPricing(during, "large").cents, 2900, "$39 at -25% is $29");
+assert.equal(deepPricing(after, "small").cents, 1900);
+assert.equal(deepPricing(after, "large").cents, 3900);
+assert.equal(deepPricing(after, "large").promo, null);
 
 console.log("all deep report tests passed", { steps: claudeCalls.length });
 process.exit(0);

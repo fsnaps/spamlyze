@@ -1,30 +1,44 @@
-import { FetchBlockedError, normalizeInputUrl, safeFetch } from "@/lib/check/safe-fetch";
+import { CrawlError, discoverSite } from "@/lib/check/crawl";
+import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
 import { createDeepReport } from "@/lib/deep/job";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
-import { deepPricing } from "@/lib/pricing";
+import { deepPricing, tierFor, tierMaxPages } from "@/lib/pricing";
 import { stripe } from "@/lib/stripe";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { url?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { url?: unknown; large?: unknown } | null;
   let url: URL;
+  let sitemapUrlCount: number | null;
   try {
     url = normalizeInputUrl(typeof body?.url === "string" ? body.url : "");
-    // Make sure we can reach the site before taking payment.
-    const home = await safeFetch(url, 10000);
-    if (home.status >= 400 || !/html/i.test(home.contentType)) {
-      return Response.json({ error: `We couldn't load ${url.hostname} (HTTP ${home.status}).` }, { status: 400 });
+    // Make sure we can reach the site, and count its pages to price it, before taking payment.
+    const site = await discoverSite(url);
+    if (site.robotsBlocked) {
+      return Response.json(
+        { error: `${url.hostname} blocks crawlers in its robots.txt, so we can't analyze it.` },
+        { status: 400 },
+      );
     }
+    sitemapUrlCount = site.sitemapUrlCount;
   } catch (err) {
-    if (err instanceof FetchBlockedError) return Response.json({ error: err.message }, { status: 400 });
+    if (err instanceof FetchBlockedError || err instanceof CrawlError) {
+      return Response.json({ error: err.message }, { status: 400 });
+    }
     return Response.json({ error: "We couldn't load your homepage. Is the site online?" }, { status: 400 });
   }
 
   try {
-    const id = await createDeepReport(url);
+    const tier = tierFor(sitemapUrlCount, body?.large === true);
+    const maxPages = tierMaxPages(tier);
     // Priced at request time, so a promo starts and ends on schedule without a redeploy.
-    const pricing = deepPricing();
+    const pricing = deepPricing(Date.now(), tier);
     const promo = pricing.promo;
+    const id = await createDeepReport(url, { tier, maxPages, priceCents: pricing.cents, sitemapUrlCountAtCheckout: sitemapUrlCount });
+    const found =
+      sitemapUrlCount === null
+        ? "No sitemap found"
+        : `${sitemapUrlCount.toLocaleString("en-US")} page${sitemapUrlCount === 1 ? "" : "s"} found in your sitemap`;
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -34,20 +48,26 @@ export async function POST(request: Request) {
             currency: "usd",
             unit_amount: pricing.cents,
             product_data: {
-              name: promo ? `Spamlyze Deep Report (${promo.label} -${promo.percentOff}%)` : "Spamlyze Deep Report",
-              description: `Page-by-page spam risk analysis of ${url.hostname} (up to 500 pages)`,
+              name: `Spamlyze Deep Report, up to ${maxPages} pages${promo ? ` (${promo.label} -${promo.percentOff}%)` : ""}`,
+              description: `Page-by-page spam risk analysis of ${url.hostname}. ${found}.`,
             },
           },
         },
       ],
-      metadata: { deepId: id, domain: url.hostname, ...(promo && { promo: `${promo.label} -${promo.percentOff}%` }) },
+      metadata: {
+        deepId: id,
+        domain: url.hostname,
+        tier,
+        sitemapUrls: String(sitemapUrlCount ?? "none"),
+        ...(promo && { promo: `${promo.label} -${promo.percentOff}%` }),
+      },
       payment_intent_data: { metadata: { deepId: id, domain: url.hostname } },
       allow_promotion_codes: true,
       success_url: `${site.url}/deep/${id}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${site.url}/?canceled=1#deep-report`,
     });
     await track({ deepCheckouts: 1 });
-    return Response.json({ url: session.url });
+    return Response.json({ url: session.url, cents: pricing.cents });
   } catch (err) {
     console.error("deep checkout failed", err instanceof Error ? err.message : err);
     return Response.json({ error: "Payments are temporarily unavailable. Please try again later." }, { status: 500 });

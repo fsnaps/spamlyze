@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --conditions=react-server scripts/test-quick-check.mts",
-    "test:deep": "tsx --conditions=react-server scripts/test-deep-report.mts"
+    "test:deep": "tsx --conditions=react-server scripts/test-deep-report.mts",
+    "test:api": "tsx --conditions=react-server scripts/test-api.mts",
+    "api": "tsx --conditions=react-server scripts/api-admin.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",

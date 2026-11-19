@@ -127,3 +127,15 @@ env:
     secret: GOOGLE_OAUTH_CLIENT_SECRET
     availability:
       - RUNTIME
+  # Public API. "true" opens it to every account; until then only accounts flagged beta can call it.
+  - variable: API_ENABLED
+    value: "false"
+    availability:
+      - RUNTIME
+  # Secret used to hash API keys (at least 32 characters). Create it once with:
+  #   openssl rand -hex 32 | npx firebase-tools apphosting:secrets:set API_KEY_PEPPER --project spamlyze --data-file -
+  # Never change it afterwards: every existing key would stop working.
+  - variable: API_KEY_PEPPER
+    secret: API_KEY_PEPPER
+    availability:
+      - RUNTIME

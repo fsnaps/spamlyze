@@ -12,9 +12,13 @@ import { sendDeepReady, sendDeepStarted } from "./emails";
 import { notifyAdmin } from "@/lib/notify";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
+import { LARGE_TIER_MAX_PAGES } from "@/lib/pricing";
 import type { DeepPage, DeepReport } from "./types";
 
-export const MAX_PAGES = 500;
+/** Pages analyzed, homepage included: set by the tier paid for (older reports: 500). */
+const maxPagesOf = (r: DeepReport) => r.maxPages ?? LARGE_TIER_MAX_PAGES;
+/** Losing pages that may be crawled on top of a finished crawl: 20% of the tier, at most MAX_GSC_EXTRA. */
+const gscExtraOf = (r: DeepReport) => Math.min(MAX_GSC_EXTRA, Math.floor(maxPagesOf(r) / 5));
 const CRAWL_PER_STEP = 40;
 const CRAWL_CONCURRENCY = 8;
 const JUDGE_BATCH = 15;
@@ -32,7 +36,10 @@ export function isDeepId(id: string) {
   return /^[A-Za-z0-9_-]{16,40}$/.test(id);
 }
 
-export async function createDeepReport(url: URL): Promise<string> {
+export async function createDeepReport(
+  url: URL,
+  plan: Pick<DeepReport, "tier" | "maxPages" | "priceCents" | "sitemapUrlCountAtCheckout"> = {},
+): Promise<string> {
   const id = randomBytes(16).toString("base64url");
   await reports()
     .doc(id)
@@ -41,6 +48,7 @@ export async function createDeepReport(url: URL): Promise<string> {
       phase: "discover",
       inputUrl: url.toString(),
       domain: url.hostname.toLowerCase().replace(/^www\./, ""),
+      ...plan,
       createdAt: FieldValue.serverTimestamp(),
     });
   return id;
@@ -77,18 +85,18 @@ export async function confirmPayment(id: string, sessionId: string): Promise<boo
       email,
       failures: 0,
     });
-    return snap.get("domain") as string;
+    return { domain: snap.get("domain") as string, maxPages: (snap.get("maxPages") as number | undefined) ?? LARGE_TIER_MAX_PAGES };
   });
   // Only the call that started the job sends the email.
   if (started) {
     const amount = session.amount_total ?? 0;
     await Promise.all([
-      email ? sendDeepStarted(email, id, started) : null,
+      email ? sendDeepStarted(email, id, started.domain, started.maxPages) : null,
       track({ deepPaid: 1, revenueCents: amount }),
       notifyAdmin(
         "deep",
-        `Deep Report sold: ${started} · $${(amount / 100).toFixed(2)}`,
-        [`Site: ${started}`, `Buyer: ${email ?? "unknown"}`, `Amount: $${(amount / 100).toFixed(2)} ${session.currency?.toUpperCase() ?? ""}`],
+        `Deep Report sold: ${started.domain} · $${(amount / 100).toFixed(2)}`,
+        [`Site: ${started.domain}`, `Tier: up to ${started.maxPages} pages`, `Buyer: ${email ?? "unknown"}`, `Amount: $${(amount / 100).toFixed(2)} ${session.currency?.toUpperCase() ?? ""}`],
         `${site.url}/deep/${id}`,
       ),
     ]);
@@ -141,14 +149,15 @@ function mergeGsc(r: DeepReport): Patch {
   if (r.phase === "crawl") {
     const cursor = r.crawlCursor ?? 1;
     const crawled = new Set(urls.slice(0, cursor).map(pageKey));
-    const first = losing.filter((u) => !crawled.has(pageKey(u))).slice(0, MAX_GSC_EXTRA);
+    const max = maxPagesOf(r);
+    const first = losing.filter((u) => !crawled.has(pageKey(u))).slice(0, Math.min(MAX_GSC_EXTRA, max - 1));
     const firstKeys = new Set(first.map(pageKey));
     const rest = urls.slice(cursor).filter((u) => !firstKeys.has(pageKey(u)));
     const next = [...urls.slice(0, cursor), ...first, ...rest];
-    return { ...done, urls: next.slice(0, Math.max(MAX_PAGES, cursor + first.length)) };
+    return { ...done, urls: next.slice(0, Math.max(max, cursor + first.length)) };
   }
   // Crawl is over: crawl the missing losing pages, then review them and rewrite the plan.
-  const missing = losing.filter((u) => !known.has(pageKey(u))).slice(0, MAX_GSC_EXTRA);
+  const missing = losing.filter((u) => !known.has(pageKey(u))).slice(0, gscExtraOf(r));
   if (missing.length) return { ...done, urls: [...urls, ...missing], crawlCursor: urls.length, phase: "crawl" };
   return r.phase === "done" ? { ...done, phase: "synthesize" } : done;
 }
@@ -237,11 +246,11 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
     const homeKey = pageKey(site.homepage.url);
     const losing = lossUrls({ ...r, origin: site.origin })
       .filter((u) => pageKey(u) !== homeKey)
-      .slice(0, MAX_GSC_EXTRA);
+      .slice(0, Math.min(MAX_GSC_EXTRA, maxPagesOf(r) - 1));
     const losingKeys = new Set(losing.map(pageKey));
     const sample = spreadSample(
       site.pool.filter((u) => !losingKeys.has(pageKey(u))),
-      MAX_PAGES - 1 - losing.length,
+      maxPagesOf(r) - 1 - losing.length,
     );
     const urls = [site.homepage.url, ...losing, ...sample];
     return {

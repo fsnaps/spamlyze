@@ -6,7 +6,7 @@ import { ScoreGauge } from "@/components/score-gauge";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { DeepCheckout } from "@/components/deep-checkout";
 import { deepPricingNow, deepReportEnabled } from "@/lib/deep/config";
-import { formatUsd } from "@/lib/pricing";
+import { formatUsd, LARGE_TIER_MAX_PAGES, tierFor, tierMaxPages } from "@/lib/pricing";
 import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
@@ -77,8 +77,12 @@ async function Report({
   if (!check) notFound();
   const gsc = await getQuickImport(typeof query.g === "string" ? query.g : undefined, id);
   const gscResult = typeof query.gsc === "string" ? query.gsc : undefined;
-  const pricing = await deepPricingNow();
+  // The Quick Check already counted the sitemap: price the Deep Report for this site's size.
+  const sitemapCount = check.metrics.sitemapUrlCount;
+  const tier = tierFor(sitemapCount);
+  const pricing = await deepPricingNow(tier);
   const deepPrice = formatUsd(pricing.cents);
+  const largePricing = sitemapCount === null && tier === "small" ? await deepPricingNow("large") : null;
   const deepCta = !deepReportEnabled()
     ? "Join the Deep Report waitlist"
     : pricing.promo
@@ -220,7 +224,18 @@ async function Report({
         </p>
         <div className="mt-5 max-w-md">
           {deepReportEnabled() ? (
-            <DeepCheckout url={check.url} price={deepPrice} />
+            <>
+              <p className="mb-3 text-sm text-muted">
+                {sitemapCount === null
+                  ? `We found no sitemap, so this price covers up to ${tierMaxPages(tier)} pages.`
+                  : `Your sitemap lists ${sitemapCount.toLocaleString("en-US")} pages: this price covers up to ${tierMaxPages(tier)} pages.`}
+              </p>
+              <DeepCheckout
+                url={check.url}
+                price={deepPrice}
+                largeOption={largePricing ? { pages: LARGE_TIER_MAX_PAGES, price: formatUsd(largePricing.cents) } : undefined}
+              />
+            </>
           ) : (
             <WaitlistForm source="report" site={check.domain} cta="Notify me at launch" />
           )}

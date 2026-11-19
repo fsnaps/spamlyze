@@ -2,26 +2,41 @@
 
 import { useState } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { SMALL_TIER_MAX_PAGES } from "@/lib/pricing";
 
-/** Starts a Stripe Checkout for the Deep Report. With `url`, the site is already known. */
-export function DeepCheckout({ url, price }: { url?: string; price: string }) {
+/**
+ * Starts a Stripe Checkout for the Deep Report. With `url`, the site is already known.
+ * The server counts the site's pages and picks the size tier; `largeOption` lets the buyer
+ * ask for the large tier when we can't count (no sitemap).
+ */
+export function DeepCheckout({
+  url,
+  price,
+  largeOption,
+}: {
+  url?: string;
+  price: string;
+  largeOption?: { pages: number; price: string };
+}) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const target = url ?? String(new FormData(event.currentTarget).get("url") ?? "");
+    const form = new FormData(event.currentTarget);
+    const target = url ?? String(form.get("url") ?? "");
+    const large = form.get("large") === "on";
     setPending(true);
     setError("");
     try {
       const res = await fetch("/api/deep/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: target }),
+        body: JSON.stringify({ url: target, large }),
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { url?: string; cents?: number; error?: string };
       if (data.url) {
-        trackEvent("begin_checkout", { currency: "USD", value: Number(price.replace(/[^0-9.]/g, "")) });
+        trackEvent("begin_checkout", { currency: "USD", value: (data.cents ?? 0) / 100 });
         window.location.href = data.url;
         return;
       }
@@ -50,12 +65,21 @@ export function DeepCheckout({ url, price }: { url?: string; price: string }) {
           />
         </>
       )}
+      {largeOption && (
+        <label className="flex items-start gap-2 text-sm text-muted">
+          <input type="checkbox" name="large" className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]" />
+          <span>
+            My site has over {SMALL_TIER_MAX_PAGES} pages: analyze up to {largeOption.pages} ({largeOption.price}). We pick this for you
+            when your sitemap shows it.
+          </span>
+        </label>
+      )}
       <button
         type="submit"
         disabled={pending}
         className="h-12 rounded-xl bg-accent px-6 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
       >
-        {pending ? "Opening secure checkout…" : `Get the Deep Report · ${price}`}
+        {pending ? "Counting your pages…" : `Get the Deep Report · ${price}`}
       </button>
       <p aria-live="polite" className="min-h-5 text-sm text-red-600 dark:text-red-400">
         {error}

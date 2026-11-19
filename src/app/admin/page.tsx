@@ -31,13 +31,23 @@ export default function AdminPage() {
   );
 }
 
-function GscBadge() {
+const AMBER = "bg-amber-500/15 text-amber-800 dark:text-amber-300";
+const FAILED: Record<string, string> = { denied: "GSC refused", no_property: "GSC no property", error: "GSC error" };
+
+/** Green when Search Console was connected; amber when someone tried and gave up or it failed. */
+function GscBadge({ doc, connected }: { doc: FirebaseFirestore.QueryDocumentSnapshot; connected: boolean }) {
+  const failure = doc.get("gscFailure") as string | undefined;
+  const [label, title, cls] = connected
+    ? ["GSC", "Search Console connected", "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"]
+    : failure && FAILED[failure]
+      ? [FAILED[failure], "Tried to connect Search Console, it didn't go through", AMBER]
+      : doc.get("gscStarts")
+        ? ["GSC abandoned", "Clicked Connect Search Console, never came back from Google", AMBER]
+        : [null, "", ""];
+  if (!label) return null;
   return (
-    <span
-      title="Search Console connected"
-      className="mr-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
-    >
-      GSC
+    <span title={title} className={`mr-2 rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>
+      {label}
     </span>
   );
 }
@@ -71,12 +81,14 @@ async function Dashboard() {
   const gscChecks = new Set(imports?.docs.map((d) => d.get("checkId") as string));
   for (const c of checks.docs) if (c.get("gscConnectedAt")) gscChecks.add(c.id);
   const paidDeeps = deeps.docs.filter((d) => d.get("status") !== "awaiting_payment").slice(0, 15);
+  const listed = checks.docs.length + paidDeeps.length;
+  const listedGsc = gscChecks.size + paidDeeps.filter((d) => d.get("gsc")).length;
 
   return (
     <>
       <p className="mt-2 text-sm text-muted">Last 30 days (UTC). Counting started when this page shipped.</p>
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Quick Checks" value={String(t.quickChecks)} hint={`${t7.quickChecks} in the last 7 days`} />
+        <Tile label="Quick Checks" value={String(t.quickChecks)} hint={`${t7.quickChecks} in the last 7 days · ${t.quickChecksCached} served from cache`} />
         <Tile label="Deep Reports sold" value={String(t.deepPaid)} hint={`${t.deepCheckouts} checkouts opened`} />
         <Tile label="Revenue" value={usd(revenue)} hint={`API cost ${usd(cost)} · net ${usd(revenue - cost)}`} />
         <Tile
@@ -90,11 +102,11 @@ async function Dashboard() {
           hint={`${t.signupsReport} from reports`}
         />
         <Tile
-          label="Monitoring / API interest"
-          value={`${t.signupsMonitoring} / ${t.signupsApi}`}
-          hint={`${t.gscConnected} Search Console imports`}
+          label="Search Console connected"
+          value={pct(listedGsc, listed)}
+          hint={`${listedGsc} of the ${listed} reports below · 30 d: ${t.gscStarts} Connect clicks → ${t.gscConnected} imports, ${t.gscFailed} refused/failed`}
         />
-        <Tile label="Cached checks" value={String(t.quickChecksCached)} hint="same domain within 24 h" />
+        <Tile label="Monitoring / API interest" value={`${t.signupsMonitoring} / ${t.signupsApi}`} />
         <Tile
           label="Errors"
           value={String(t.quickCheckErrors + t.deepFailed)}
@@ -150,7 +162,7 @@ async function Dashboard() {
                   {c.get("domain")}
                 </a>
                 <span className="shrink-0 text-muted tabular-nums">
-                  {gscChecks.has(c.id) && <GscBadge />}
+                  <GscBadge doc={c} connected={gscChecks.has(c.id)} />
                   {c.get("analysis.riskScore") ?? "–"}/100 · {c.get("createdAt")?.toDate().toISOString().slice(0, 10)}
                 </span>
               </li>
@@ -166,7 +178,7 @@ async function Dashboard() {
                   {d.get("domain")}
                 </a>
                 <span className="shrink-0 text-muted">
-                  {d.get("gsc") && <GscBadge />}
+                  <GscBadge doc={d} connected={d.get("gsc") != null} />
                   {d.get("status")}
                   {d.get("refunded") ? " · refunded" : ""} · {d.get("email") ?? ""}
                 </span>

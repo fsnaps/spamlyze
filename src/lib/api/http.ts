@@ -3,7 +3,8 @@ import { clientIp } from "@/lib/check/guard";
 import { getApiAccount, type ApiAccount } from "./accounts";
 import { apiEnabled } from "./config";
 import type { CreditError } from "./credits";
-import { ApiConfigError, findApiKey, touchApiKey, type ApiKeyDoc } from "./keys";
+import { ApiConfigError, findApiKey, markRateLimited, touchApiKey, type ApiKeyDoc } from "./keys";
+import { track } from "@/lib/stats";
 import { RATE_PER_MINUTE, takeRate } from "./rate-limit";
 
 export type ApiContext = {
@@ -34,7 +35,10 @@ export async function authenticate(request: Request): Promise<ApiContext | Respo
   if (!raw) return apiError(401, "missing_api_key", "Send your API key in the Authorization header: Bearer spz_live_…");
   try {
     const found = await findApiKey(raw);
-    if (!found) return apiError(401, "invalid_api_key", "This API key is invalid or has been revoked.");
+    if (!found) {
+      await track({ apiAuthFailures: 1 });
+      return apiError(401, "invalid_api_key", "This API key is invalid or has been revoked.");
+    }
     const account = await getApiAccount(found.data.accountId);
     if (!account) return apiError(401, "invalid_api_key", "This API key is invalid or has been revoked.");
     if (!apiEnabled() && !account.beta) {
@@ -45,6 +49,7 @@ export async function authenticate(request: Request): Promise<ApiContext | Respo
     }
     const rate = await takeRate(found.keyId);
     if (!rate.ok) {
+      await Promise.all([track({ apiRateLimited: 1 }), markRateLimited(found.keyId)]);
       return apiError(429, "rate_limited", `Too many requests: ${RATE_PER_MINUTE()} per minute per key.`, {
         "retry-after": String(rate.retryAfter),
       });

@@ -24,7 +24,14 @@ export type ApiKeyDoc = {
   revokedAt: Timestamp | null;
   lastUsedAt: Timestamp | null;
   lastUsedIp: string | null;
+  /** Last time each client IP used the key (keys: IP with "." and ":" as "_"), for the admin security view. */
+  ips?: Record<string, Timestamp>;
+  /** Last time the key hit the rate limit. */
+  rateLimitedAt?: Timestamp | null;
 };
+
+export const ipField = (ip: string) => `ip_${ip.replace(/[^0-9A-Za-z]/g, "_").slice(0, 64)}`;
+export const ipFromField = (f: string) => f.replace(/^ip_/, "").replace(/_/g, f.includes("_") && f.split("_").length > 5 ? ":" : ".");
 
 const keys = () => db().collection("apiKeys");
 
@@ -86,7 +93,7 @@ export async function touchApiKey(keyId: string, data: ApiKeyDoc, ip: string): P
   if (Date.now() - last < LAST_USED_EVERY_MS && data.lastUsedIp === ip) return;
   await keys()
     .doc(keyId)
-    .update({ lastUsedAt: FieldValue.serverTimestamp(), lastUsedIp: ip })
+    .update({ lastUsedAt: FieldValue.serverTimestamp(), lastUsedIp: ip, [`ips.${ipField(ip)}`]: FieldValue.serverTimestamp() })
     .catch((err) => console.error("apiKey touch failed", err instanceof Error ? err.message : err));
 }
 
@@ -105,4 +112,12 @@ export async function listApiKeys(accountId: string): Promise<(ApiKeyDoc & { key
   return snap.docs
     .map((d) => ({ keyId: d.id, ...(d.data() as ApiKeyDoc) }))
     .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
+}
+
+/** Notes that a key hit the rate limit (security view). Never throws. */
+export async function markRateLimited(keyId: string): Promise<void> {
+  await keys()
+    .doc(keyId)
+    .update({ rateLimitedAt: FieldValue.serverTimestamp() })
+    .catch(() => undefined);
 }

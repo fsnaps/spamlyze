@@ -19,19 +19,29 @@ export type StoredCheck = {
   metrics: Metrics;
   analysis: Analysis | null;
   model: string;
+  source?: "site" | "api";
+  accountId?: string;
 };
 
-/** Runs (or reuses) a quick check and returns its id. Throws user-facing errors. */
+export const domainOf = (url: URL) => url.hostname.toLowerCase().replace(/^www\./, "");
+
+/** Runs (or reuses) a quick check for the free site and returns its id. Throws user-facing errors. */
 export async function runQuickCheck(url: URL, ip: string): Promise<string> {
-  const domain = url.hostname.toLowerCase().replace(/^www\./, "");
-  const cached = await cachedCheck(domain);
+  const cached = await cachedCheck(domainOf(url));
   if (cached) {
     await track({ quickChecksCached: 1 });
     return cached;
   }
-
   await takeQuota(ip);
+  return executeQuickCheck(url);
+}
 
+/**
+ * Crawls, analyzes and stores a new quick check, without any quota or cache check (the caller
+ * decides). `api` marks checks paid for through the public API.
+ */
+export async function executeQuickCheck(url: URL, api?: { accountId: string }): Promise<string> {
+  const domain = domainOf(url);
   const result = await crawl(url);
   const metrics = computeMetrics(result);
   const ai = result.robotsBlocked ? null : await analyze(result, metrics);
@@ -50,23 +60,26 @@ export async function runQuickCheck(url: URL, ip: string): Promise<string> {
       analysis: ai?.analysis ?? null,
       model: ai?.model ?? "",
       usage: ai?.usage ?? null,
+      source: api ? "api" : "site",
+      ...(api ? { accountId: api.accountId } : {}),
     });
   await db().collection("checkCache").doc(domain).set({ checkId: id, createdAt: FieldValue.serverTimestamp() });
 
   const opus = ai?.model.includes("opus");
   await Promise.all([
     track({
-      quickChecks: 1,
+      [api ? "apiQuickChecks" : "quickChecks"]: 1,
       [opus ? "opusInputTokens" : "haikuInputTokens"]: ai?.usage.input ?? 0,
       [opus ? "opusOutputTokens" : "haikuOutputTokens"]: ai?.usage.output ?? 0,
     }),
     notifyAdmin(
       "quick_check",
-      `Quick Check: ${domain}${ai ? ` · ${ai.analysis.riskScore}/100` : ""}`,
+      `${api ? "API " : ""}Quick Check: ${domain}${ai ? ` · ${ai.analysis.riskScore}/100` : ""}`,
       [
         `Site: ${result.origin}`,
         ai ? `Risk: ${ai.analysis.riskScore}/100 (${ai.analysis.riskLevel})` : "Blocked by robots.txt",
         `Pages sampled: ${metrics.pagesAnalyzed}`,
+        ...(api ? [`API account: ${api.accountId}`] : []),
       ],
       `${site.url}/report/${id}`,
     ),

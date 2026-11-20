@@ -62,13 +62,25 @@ export type FetchedPage = {
   status: number;
   contentType: string;
   body: string;
+  /** An anti-bot challenge (Vercel Security Checkpoint, Cloudflare "Just a moment"...) answered instead of the page. */
+  challenged: boolean;
 };
+
+/** Firewalls that answer bots with a JavaScript challenge page instead of the content. */
+function isChallenge(res: Response, body: string): boolean {
+  if (/challenge/i.test(res.headers.get("x-vercel-mitigated") ?? "")) return true;
+  if (/challenge/i.test(res.headers.get("cf-mitigated") ?? "")) return true;
+  if (res.status !== 403 && res.status !== 429 && res.status !== 503) return false;
+  return /Vercel Security Checkpoint|cf-chl-|challenge-platform|Just a moment\.\.\.|Attention Required! \| Cloudflare|_Incapsula_|px-captcha|DataDome/i.test(
+    body.slice(0, 50_000),
+  );
+}
 
 /**
  * GET a public URL with SSRF protection: every hop (including redirects) must resolve to
  * public addresses, standard ports only, size and time capped.
  */
-export async function safeFetch(input: string | URL, timeoutMs = 7000): Promise<FetchedPage> {
+export async function safeFetch(input: string | URL, timeoutMs = 7000, maxBytes = MAX_BYTES): Promise<FetchedPage> {
   let url = typeof input === "string" ? new URL(input) : new URL(input.toString());
   const deadline = AbortSignal.timeout(timeoutMs);
 
@@ -92,13 +104,13 @@ export async function safeFetch(input: string | URL, timeoutMs = 7000): Promise<
     }
 
     const contentType = res.headers.get("content-type") ?? "";
-    const body = await readCapped(res);
-    return { url: url.toString(), status: res.status, contentType, body };
+    const body = await readCapped(res, maxBytes);
+    return { url: url.toString(), status: res.status, contentType, body, challenged: isChallenge(res, body) };
   }
   throw new FetchBlockedError("Too many redirects.");
 }
 
-async function readCapped(res: Response): Promise<string> {
+async function readCapped(res: Response, maxBytes: number): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -107,7 +119,7 @@ async function readCapped(res: Response): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BYTES) {
+    if (size > maxBytes) {
       await reader.cancel();
       break;
     }

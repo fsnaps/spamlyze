@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { db } from "@/lib/firebase-admin";
+import { RerunDeepButton } from "./rerun-deep-button";
 import { TestDeepForm } from "./test-deep-form";
 import { apiCostUsd, lastDays, STAT_KEYS, type DayStats, type StatKey } from "@/lib/stats";
 
@@ -189,6 +190,8 @@ async function Dashboard() {
                   {d.get("test") ? "test · " : ""}
                   {d.get("status")}
                   {d.get("refunded") ? " · refunded" : ""} · {d.get("email") ?? ""}
+                  {d.get("status") === "done" && typeof d.get("pagesCrawled") === "number" ? ` · ${d.get("pagesCrawled")} p.` : ""}
+                  {(d.get("status") === "done" || d.get("status") === "failed") && <RerunDeepButton id={d.id} />}
                 </span>
               </li>
             ))}

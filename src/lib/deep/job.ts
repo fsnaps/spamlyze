@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin";
-import { CrawlError, discoverSite, fetchPageData, mapLimit, spreadSample, type PageData } from "@/lib/check/crawl";
+import { CrawlError, botChallengeMessage, discoverSite, fetchPage, mapLimit, spreadSample, type PageData } from "@/lib/check/crawl";
 import { FetchBlockedError } from "@/lib/check/safe-fetch";
 import { computeMetrics } from "@/lib/check/metrics";
 import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
@@ -21,15 +21,30 @@ import type { DeepPage, DeepReport } from "./types";
 const maxPagesOf = (r: DeepReport) => r.maxPages ?? LARGE_TIER_MAX_PAGES;
 /** Losing pages that may be crawled on top of a finished crawl: 20% of the tier, at most MAX_GSC_EXTRA. */
 const gscExtraOf = (r: DeepReport) => Math.min(MAX_GSC_EXTRA, Math.floor(maxPagesOf(r) / 5));
-const CRAWL_PER_STEP = 40;
-const CRAWL_CONCURRENCY = 8;
+const CRAWL_PER_STEP = 30;
+const CRAWL_CONCURRENCY = 6;
+const CRAWL_TIMEOUT_MS = 10_000;
+/** Second chance for pages that timed out or were rate-limited: slower, one small batch per step. */
+const RETRY_PER_STEP = 8;
+const RETRY_CONCURRENCY = 2;
+const RETRY_TIMEOUT_MS = 15_000;
+const RETRYABLE = /^(timeout|network|http_429|http_5\d\d)$/;
 const JUDGE_BATCH = 15;
 const JUDGE_BATCHES_PER_STEP = 2;
 const LEASE_MS = 75_000;
 const MAX_FAILURES = 5;
 /** Losing pages from Search Console that may be added on top of the sitemap sample. */
 const MAX_GSC_EXTRA = 100;
-const DEEP_SITEMAP_LIMITS = { maxFiles: 25, maxUrls: 20_000, childrenPerIndex: 20 };
+const DEEP_SITEMAP_LIMITS = { maxFiles: 25, maxUrls: 20_000, childrenPerIndex: 20, timeoutMs: 20_000, maxBytes: 15_000_000 };
+
+/**
+ * A report is only worth delivering if we could read enough of the site. Below this, the job
+ * fails (refund + admin alert) instead of handing over a report built on a handful of pages.
+ */
+export function lowCoverage(planned: number, crawled: number): boolean {
+  if (planned < 10) return false;
+  return crawled < Math.max(8, Math.ceil(planned * 0.3));
+}
 
 const reports = () => db().collection("deepReports");
 const pagesOf = (id: string) => reports().doc(id).collection("pages");
@@ -139,6 +154,44 @@ export async function attachSearchConsole(id: string, gsc: GscData, losses: Page
   await enqueueDeepStep(id, 0);
 }
 
+/**
+ * Admin only: runs a delivered (or failed) report again from scratch, keeping its Search Console
+ * data. No email goes out: the admin tells the buyer. The caller checks the site is crawlable first.
+ */
+export async function restartDeepReport(id: string): Promise<boolean> {
+  const ref = reports().doc(id);
+  const r = (await ref.get()).data() as DeepReport | undefined;
+  if (!r || (r.status !== "done" && r.status !== "failed")) return false;
+  const old = await pagesOf(id).get();
+  for (let i = 0; i < old.docs.length; i += 400) {
+    const batch = db().batch();
+    for (const d of old.docs.slice(i, i + 400)) batch.delete(d.ref);
+    await batch.commit();
+  }
+  const reset = FieldValue.delete();
+  await ref.update({
+    status: "running",
+    phase: "discover",
+    failures: 0,
+    leaseUntil: 0,
+    gscPending: false,
+    urls: reset,
+    crawlCursor: reset,
+    pagesCrawled: reset,
+    analyzeCursor: reset,
+    pagesAnalyzed: reset,
+    retryIndexes: reset,
+    crawlErrors: reset,
+    sitemapErrors: reset,
+    sitemapChallenged: reset,
+    robotsBlocked: reset,
+    error: reset,
+    rerunAt: FieldValue.serverTimestamp(),
+  });
+  await enqueueDeepStep(id, 0);
+  return true;
+}
+
 /** Losing pages on the same site, as URLs we can crawl. */
 function lossUrls(r: DeepReport): string[] {
   const host = r.origin ? new URL(r.origin).hostname.replace(/^www\./, "") : r.domain;
@@ -200,7 +253,7 @@ export async function runStep(id: string): Promise<DeepReport | null> {
     await ref.update({ ...patch, leaseUntil: 0, error: FieldValue.delete() });
     if (patch.robotsBlocked === true && report.accountId) await refund(id, report);
     // A report updated with Search Console data was already delivered once: no second email.
-    if (patch.status === "done" && !report.finishedAt) {
+    if (patch.status === "done" && !report.finishedAt && !report.rerunAt) {
       const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
       await Promise.all([
         report.email ? sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel) : null,
@@ -286,6 +339,9 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
       origin: site.origin,
       robotsBlocked: false,
       sitemapUrlCount: site.sitemapUrlCount,
+      sitemapStatus: site.sitemapStatus,
+      sitemapErrors: site.sitemapErrors,
+      sitemapChallenged: site.sitemapChallenged,
       sitemapSample: spreadSample(site.sitemapUrls, 200).map((u) => new URL(u).pathname),
       urls,
       crawlCursor: 1,
@@ -296,25 +352,60 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
   async crawl(id, r) {
     const urls = r.urls ?? [];
     const start = r.crawlCursor ?? 1;
-    const slice = urls.slice(start, start + CRAWL_PER_STEP);
-    const fetched = await mapLimit(slice, CRAWL_CONCURRENCY, (u) => fetchPageData(u, r.origin!));
+    const retrying = start >= urls.length;
+    const indexes = retrying
+      ? (r.retryIndexes ?? []).slice(0, RETRY_PER_STEP)
+      : urls.slice(start, start + CRAWL_PER_STEP).map((_, i) => start + i);
+    const results = await mapLimit(indexes, retrying ? RETRY_CONCURRENCY : CRAWL_CONCURRENCY, (i) =>
+      fetchPage(urls[i], r.origin!, retrying ? RETRY_TIMEOUT_MS : CRAWL_TIMEOUT_MS),
+    );
     const batch = db().batch();
     let n = 0;
-    fetched.forEach((page, i) => {
-      if (!page) return;
-      batch.set(pagesOf(id).doc(String(start + i)), { ...page, index: start + i } satisfies DeepPage);
-      n++;
+    const errors: Record<string, number> = {};
+    const retry: number[] = [];
+    results.forEach((res, k) => {
+      const index = indexes[k];
+      if (res.page) {
+        batch.set(pagesOf(id).doc(String(index)), { ...res.page, index } satisfies DeepPage);
+        n++;
+        return;
+      }
+      errors[res.error] = (errors[res.error] ?? 0) + 1;
+      if (!retrying && RETRYABLE.test(res.error)) retry.push(index);
     });
     await batch.commit();
-    const next = start + slice.length;
-    return {
+
+    const crawled = (r.pagesCrawled ?? 0) + n;
+    const remainingRetries = retrying ? (r.retryIndexes ?? []).slice(indexes.length) : [...(r.retryIndexes ?? []), ...retry];
+    const next = retrying ? start : start + indexes.length;
+    const finished = next >= urls.length && remainingRetries.length === 0;
+    const patch: Patch = {
       crawlCursor: next,
       pagesCrawled: FieldValue.increment(n),
-      // Back from a Search Console top-up, the review resumes where it stopped.
-      ...(next >= urls.length
-        ? { phase: "analyze", analyzeCursor: r.analyzeCursor ?? 0, pagesAnalyzed: r.pagesAnalyzed ?? 0 }
-        : {}),
+      retryIndexes: remainingRetries,
+      ...Object.fromEntries(Object.entries(errors).map(([code, count]) => [`crawlErrors.${code}`, FieldValue.increment(count)])),
     };
+    if (!finished) return patch;
+
+    // Never hand over a report built on a handful of pages: fail, refund and alert instead.
+    if (!r.finishedAt && lowCoverage(urls.length, crawled)) {
+      const all = { ...(r.crawlErrors ?? {}) };
+      for (const [code, count] of Object.entries(errors)) all[code] = (all[code] ?? 0) + count;
+      const challenged = (all.challenge ?? 0) + (r.sitemapChallenged ? 1 : 0);
+      // Keep the failure reasons on the report for diagnosis, then fail the job.
+      await reports().doc(id).update(patch);
+      await track({ deepLowCoverage: 1 });
+      const detail = Object.entries(all)
+        .map(([code, count]) => `${code} ×${count}`)
+        .join(", ");
+      throw new CrawlError(
+        challenged > 0
+          ? `${botChallengeMessage(r.domain)} We could load only ${crawled} of ${urls.length} pages.`
+          : `We could load only ${crawled} of the ${urls.length} pages we planned (${detail || "no answer"}), not enough for a reliable report.`,
+      );
+    }
+    // Back from a Search Console top-up, the review resumes where it stopped.
+    return { ...patch, phase: "analyze", analyzeCursor: r.analyzeCursor ?? 0, pagesAnalyzed: r.pagesAnalyzed ?? 0 };
   },
 
   async analyze(id, r) {
@@ -366,6 +457,11 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
       metrics,
       r.sitemapSample ?? [],
       r.gsc ? { gsc: r.gsc, losses: r.gscLosses ?? [] } : undefined,
+      {
+        sitemapStatus: r.sitemapStatus ?? (r.sitemapUrlCount == null ? "none" : "found"),
+        pagesPlanned: r.urls?.length ?? all.length,
+        pagesNotLoaded: r.crawlErrors ?? {},
+      },
     );
     const { analysis, usage } = await synthesize(input, new Set(all.map((p) => p.url)));
     return {

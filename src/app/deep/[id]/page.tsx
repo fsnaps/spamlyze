@@ -201,10 +201,11 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
           {pages.length} pages reviewed
-          {report.sitemapUrlCount ? ` of ${report.sitemapUrlCount} in your sitemap` : ""} · {date}
+          {report.sitemapUrlCount ? ` of ${report.sitemapUrlCount.toLocaleString("en-US")} in your sitemap` : ""} · {date}
         </p>
         <PrintButton />
       </div>
+      <Coverage report={report} losingReviewed={pages.filter((p) => losses.has(pageKey(p.url))).length} />
 
       <section className="sl-fade-up mt-6 flex flex-col gap-6 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center">
         <div className="shrink-0 text-center sm:w-40">
@@ -322,5 +323,47 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
         Google.
       </p>
     </>
+  );
+}
+
+const ERROR_LABELS: Record<string, string> = {
+  challenge: "blocked by an anti-bot firewall",
+  timeout: "timed out",
+  http_429: "rate-limited (HTTP 429)",
+  http_403: "refused (HTTP 403)",
+  http_404: "not found (HTTP 404)",
+  not_html: "not HTML pages",
+  network: "network errors",
+  blocked: "not reachable",
+};
+
+/** What the report is built on: pages read, pages we couldn't load and why, Search Console pages covered. */
+function Coverage({ report, losingReviewed }: { report: DeepReport; losingReviewed: number }) {
+  const notLoaded = Object.entries(report.crawlErrors ?? {}).filter(([, n]) => n > 0);
+  const missing = notLoaded.reduce((sum, [, n]) => sum + n, 0);
+  const losing = report.gscLosses?.length ?? 0;
+  const unreadable = report.sitemapStatus === "unreadable";
+  if (!missing && !losing && !unreadable) return null;
+  return (
+    <ul className="mt-4 space-y-1 rounded-2xl border border-line bg-surface p-4 text-sm text-muted">
+      {losing > 0 && (
+        <li>
+          Search Console: {losingReviewed} of the {losing} pages that lost the most clicks were reviewed
+          {report.gsc?.losers?.update ? ` (after the ${report.gsc.losers.update})` : ""}.
+        </li>
+      )}
+      {missing > 0 && (
+        <li>
+          {missing} page{missing === 1 ? "" : "s"} couldn&apos;t be loaded:{" "}
+          {notLoaded.map(([code, n]) => `${n} ${ERROR_LABELS[code] ?? code}`).join(", ")}.
+        </li>
+      )}
+      {unreadable && (
+        <li>
+          Your sitemap exists but we couldn&apos;t read it{report.sitemapChallenged ? " (an anti-bot firewall answered instead)" : ""}
+          . Pages were picked from your site&apos;s links instead.
+        </li>
+      )}
+    </ul>
   );
 }

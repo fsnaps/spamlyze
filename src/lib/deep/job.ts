@@ -9,6 +9,7 @@ import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
 import { stripe } from "@/lib/stripe";
 import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./analyze";
 import { sendDeepReady, sendDeepStarted } from "./emails";
+import { enqueueDeepStep } from "./tasks";
 import { notifyAdmin } from "@/lib/notify";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
@@ -91,6 +92,7 @@ export async function confirmPayment(id: string, sessionId: string): Promise<boo
   if (started) {
     const amount = session.amount_total ?? 0;
     await Promise.all([
+      enqueueDeepStep(id, 0),
       email ? sendDeepStarted(email, id, started.domain, started.maxPages) : null,
       track({ deepPaid: 1, revenueCents: amount }),
       notifyAdmin(
@@ -121,6 +123,8 @@ export async function attachSearchConsole(id: string, gsc: GscData, losses: Page
       ...(reopen ? { status: "running", failures: 0, leaseUntil: 0 } : {}),
     });
   });
+  // Running or just reopened: make sure the server keeps it moving even if the page is closed.
+  await enqueueDeepStep(id, 0);
 }
 
 /** Losing pages on the same site, as URLs we can crawl. */

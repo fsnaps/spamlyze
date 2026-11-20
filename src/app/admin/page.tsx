@@ -23,6 +23,9 @@ export default function AdminPage() {
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-3xl font-semibold tracking-tight">Stats</h1>
         <span className="flex gap-4 text-sm">
+          <a href="/admin/checkouts" className="text-accent underline">
+            Checkouts →
+          </a>
           <a href="/admin/api" className="text-accent underline">
             API accounts & keys →
           </a>

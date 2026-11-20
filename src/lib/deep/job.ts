@@ -55,6 +55,17 @@ export async function createDeepReport(
   return id;
 }
 
+/**
+ * Starts a free test report (admin only, no Stripe): same job as a paid one, flagged `test`,
+ * so nothing to refund if it fails. The caller checks the admin session and the daily cap.
+ */
+export async function startTestDeepReport(url: URL, maxPages: number, email: string): Promise<string> {
+  const id = await createDeepReport(url, { tier: maxPages > 100 ? "large" : "small", maxPages, priceCents: 0 });
+  await reports().doc(id).update({ status: "running", test: true, email, paidAt: FieldValue.serverTimestamp(), failures: 0 });
+  await enqueueDeepStep(id, 0);
+  return id;
+}
+
 export async function getDeepReport(id: string): Promise<DeepReport | null> {
   if (!isDeepId(id)) return null;
   const snap = await reports().doc(id).get();

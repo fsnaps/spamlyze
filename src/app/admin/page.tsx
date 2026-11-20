@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { db } from "@/lib/firebase-admin";
+import { TestDeepForm } from "./test-deep-form";
 import { apiCostUsd, lastDays, STAT_KEYS, type DayStats, type StatKey } from "@/lib/stats";
 
 export const metadata: Metadata = { title: "Admin", robots: { index: false, follow: false } };
@@ -176,6 +177,7 @@ async function Dashboard() {
         </section>
         <section>
           <h2 className="text-xl font-semibold">Latest Deep Reports</h2>
+          <TestDeepForm />
           <ul className="mt-4 divide-y divide-line rounded-2xl border border-line bg-surface text-sm">
             {paidDeeps.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-2">
@@ -184,6 +186,7 @@ async function Dashboard() {
                 </a>
                 <span className="shrink-0 text-muted">
                   <GscBadge doc={d} connected={d.get("gsc") != null} />
+                  {d.get("test") ? "test · " : ""}
                   {d.get("status")}
                   {d.get("refunded") ? " · refunded" : ""} · {d.get("email") ?? ""}
                 </span>

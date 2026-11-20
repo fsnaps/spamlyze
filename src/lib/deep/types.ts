@@ -39,6 +39,8 @@ export type DeepReport = {
   error?: string;
   failures?: number;
   refunded?: boolean;
+  /** Free test report started from /admin: no payment, nothing to refund. */
+  test?: boolean;
   leaseUntil?: number;
   usage?: { input: number; output: number };
   /** Search Console figures, imported once when the buyer connects their property. */

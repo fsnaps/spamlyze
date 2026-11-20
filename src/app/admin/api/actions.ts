@@ -1,19 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { ADMIN_COOKIE, readSession } from "@/lib/admin/session";
+import { requireAdmin } from "@/lib/admin/require";
 import { accounts } from "@/lib/api/accounts";
 import { addCredits } from "@/lib/api/credits";
 import { revokeApiKey } from "@/lib/api/keys";
-
-// Server actions are reachable by POST from anywhere: each one checks the admin session itself,
-// on top of the /admin proxy.
-async function requireAdmin(): Promise<string> {
-  const email = readSession((await cookies()).get(ADMIN_COOKIE)?.value);
-  if (!email) throw new Error("Not signed in as admin");
-  return email;
-}
 
 const ACCOUNT_RE = /^acct_[A-Za-z0-9_-]{8,20}$/;
 

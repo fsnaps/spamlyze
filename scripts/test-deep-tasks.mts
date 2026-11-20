@@ -130,6 +130,23 @@ assert.equal(done.status, "done", `ended in ${done.status} after ${delivered} ta
 assert.equal(done.pagesAnalyzed, 31);
 assert.equal(queued.length, 0, "the chain stops once the report is done");
 
+// Free admin test report: starts running at once, flagged test, driven by the queue to the end.
+const { startTestDeepReport } = await import("../src/lib/deep/job");
+const testId = await startTestDeepReport(new URL("https://tasks.test/"), 100, "admin@example.com");
+let t0 = (await getDeepReport(testId))!;
+assert.equal(t0.status, "running");
+assert.equal(t0.test, true);
+assert.equal(t0.priceCents, 0);
+assert.equal(t0.maxPages, 100);
+assert.equal(queued.length, 1, "the test report was queued");
+for (let i = 0; i < 40 && queued.length; i++) {
+  names.clear();
+  await deliver(queued.shift()!);
+}
+t0 = (await getDeepReport(testId))!;
+assert.equal(t0.status, "done");
+assert.equal(t0.refunded, undefined);
+
 // If Cloud Tasks is down, enqueue says so without throwing (the page still drives the report).
 tasksApiStatus = 503;
 assert.equal(await tasks.enqueueDeepStep(id, 0), false);

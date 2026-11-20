@@ -10,6 +10,7 @@ import { stripe } from "@/lib/stripe";
 import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./analyze";
 import { sendDeepReady, sendDeepStarted } from "./emails";
 import { enqueueDeepStep } from "./tasks";
+import { refundCharge } from "@/lib/api/credits";
 import { notifyAdmin } from "@/lib/notify";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
@@ -197,6 +198,7 @@ export async function runStep(id: string): Promise<DeepReport | null> {
   try {
     const patch = report.gscPending ? mergeGsc(report) : await PHASES[report.phase](id, report);
     await ref.update({ ...patch, leaseUntil: 0, error: FieldValue.delete() });
+    if (patch.robotsBlocked === true && report.accountId) await refund(id, report);
     // A report updated with Search Console data was already delivered once: no second email.
     if (patch.status === "done" && !report.finishedAt) {
       const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
@@ -235,6 +237,17 @@ export async function runStep(id: string): Promise<DeepReport | null> {
 
 /** A report we couldn't deliver is refunded in full, automatically. */
 async function refund(id: string, report: DeepReport) {
+  if (report.accountId && report.chargeRef) {
+    // API report: the credits go back to the account's prepaid balance.
+    try {
+      const r = await refundCharge(report.accountId, report.chargeRef, "report failed");
+      if (r && !r.replayed) await track({ apiRefundedCents: report.priceCents ?? 0 });
+      await reports().doc(id).update({ refunded: true });
+    } catch (err) {
+      console.error("api deep refund failed", id, err instanceof Error ? err.message : err);
+    }
+    return;
+  }
   if (!report.stripeSessionId) return;
   try {
     const session = await stripe().checkout.sessions.retrieve(report.stripeSessionId);

@@ -11,6 +11,11 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) {
   process.exit(0);
 }
 process.env.GOOGLE_CLOUD_PROJECT ??= "demo-spamlyze";
+// Start from an empty database: daily stats checked below would otherwise add up across runs.
+await fetch(
+  `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT}/databases/(default)/documents`,
+  { method: "DELETE" },
+);
 process.env.ANTHROPIC_API_KEY ??= "test-key";
 process.env.BREVO_API_KEY = "test-brevo";
 

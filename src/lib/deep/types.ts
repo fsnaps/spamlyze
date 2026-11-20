@@ -39,6 +39,10 @@ export type DeepReport = {
   error?: string;
   failures?: number;
   refunded?: boolean;
+  /** Paid through the public API: the account charged, and the ledger ref to refund. */
+  source?: "site" | "api";
+  accountId?: string;
+  chargeRef?: string;
   /** Free test report started from /admin: no payment, nothing to refund. */
   test?: boolean;
   leaseUntil?: number;

@@ -24,6 +24,7 @@ export const STAT_KEYS = [
   "opusInputTokens",
   "opusOutputTokens",
   "apiQuickChecks",
+  "apiDeepReports",
   "apiChargedCents",
   "apiRefundedCents",
   "apiAuthFailures",

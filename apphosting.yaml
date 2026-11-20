@@ -139,3 +139,16 @@ env:
     secret: API_KEY_PEPPER
     availability:
       - RUNTIME
+  # Server-side driver of Deep Reports (Cloud Tasks): reports finish even when the page is closed.
+  # Leave DEEP_TASKS_QUEUE empty to rely on the buyer's page only. One-time setup (project spamlyze):
+  #   gcloud services enable cloudtasks.googleapis.com
+  #   gcloud tasks queues create deep-steps --location=europe-west1 --max-concurrent-dispatches=3 --max-attempts=20 --min-backoff=5s
+  #   gcloud projects add-iam-policy-binding spamlyze --role=roles/cloudtasks.enqueuer --member=serviceAccount:firebase-app-hosting-compute@spamlyze.iam.gserviceaccount.com
+  - variable: DEEP_TASKS_QUEUE
+    value: "deep-steps"
+    availability:
+      - RUNTIME
+  - variable: DEEP_TASKS_LOCATION
+    value: "europe-west1"
+    availability:
+      - RUNTIME

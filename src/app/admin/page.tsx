@@ -20,9 +20,14 @@ export default function AdminPage() {
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12 sm:px-6">
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-3xl font-semibold tracking-tight">Stats</h1>
-        <a href="/api/admin/logout" className="text-sm text-muted underline">
-          Sign out
-        </a>
+        <span className="flex gap-4 text-sm">
+          <a href="/admin/api" className="text-accent underline">
+            API accounts & keys →
+          </a>
+          <a href="/api/admin/logout" className="text-muted underline">
+            Sign out
+          </a>
+        </span>
       </div>
       <Suspense fallback={<p className="mt-8 text-muted">Loading…</p>}>
         <Dashboard />

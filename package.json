@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "tsx --conditions=react-server scripts/test-quick-check.mts",
     "test:deep": "tsx --conditions=react-server scripts/test-deep-report.mts",
-    "test:api": "tsx --conditions=react-server scripts/test-api.mts && tsx --conditions=react-server scripts/test-api-credits.mts",
+    "test:api": "tsx --conditions=react-server scripts/test-api.mts && tsx --conditions=react-server scripts/test-api-credits.mts && tsx --conditions=react-server scripts/test-api-checks.mts",
     "api": "tsx --conditions=react-server scripts/api-admin.mts"
   },
   "dependencies": {

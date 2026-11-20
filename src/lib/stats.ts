@@ -23,6 +23,11 @@ export const STAT_KEYS = [
   "haikuOutputTokens",
   "opusInputTokens",
   "opusOutputTokens",
+  "apiQuickChecks",
+  "apiChargedCents",
+  "apiRefundedCents",
+  "apiAuthFailures",
+  "apiRateLimited",
 ] as const;
 export type StatKey = (typeof STAT_KEYS)[number];
 export type DayStats = Partial<Record<StatKey, number>> & { day: string };

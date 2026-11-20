@@ -12,6 +12,8 @@ export const STAT_KEYS = [
   "revenueCents",
   "deepDone",
   "deepFailed",
+  "deepBlockedAtCheckout",
+  "deepLowCoverage",
   "signupsWaitlist",
   "signupsReport",
   "signupsMonitoring",

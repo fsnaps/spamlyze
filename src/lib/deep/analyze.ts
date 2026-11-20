@@ -150,6 +150,8 @@ export type DeepAnalysis = z.infer<typeof OverviewSchema> & { actions: z.infer<t
 export type SiteSummaryInput = {
   site: string;
   pagesAnalyzed: number;
+  /** How much of the site we could read: "unreadable" means a sitemap exists but we couldn't load it. */
+  coverage?: { sitemapStatus: "found" | "none" | "unreadable"; pagesPlanned: number; pagesNotLoaded: Record<string, number> };
   metrics: Metrics;
   sitemapPathSample: string[];
   homepage: ReturnType<typeof compactPage>;
@@ -182,6 +184,7 @@ export function buildSummaryInput(
   metrics: Metrics,
   sitemapPathSample: string[],
   searchConsole?: { gsc: GscData; losses: PageLoss[] },
+  coverage?: SiteSummaryInput["coverage"],
 ): SiteSummaryInput {
   const lossByKey = new Map((searchConsole?.losses ?? []).map((l) => [pageKey(l.url), l]));
   const qualityCounts: Record<string, number> = {};
@@ -245,6 +248,7 @@ export function buildSummaryInput(
   return {
     site,
     pagesAnalyzed: pages.length,
+    ...(coverage ? { coverage } : {}),
     metrics,
     sitemapPathSample: sitemapPathSample.slice(0, 80),
     homepage: compactPage(homepage),
@@ -268,6 +272,8 @@ Rules:
 - riskScore is 0-100 (0-29 low, 30-59 moderate, 60-100 high); each signal score uses the same scale.
 - Return exactly one entry per signal id. Use "unknown" only when the data gives no basis to judge.
 - summary: 3-4 sentences for the site owner. finding: 2-3 sentences with numbers from the input. exampleUrls: up to 5 URLs from the input.
+- coverage.sitemapStatus: recommend creating a sitemap only when it is "none". When it is "unreadable", the sitemap exists but our crawler couldn't load it (firewall, anti-bot challenge, timeout): say so, and suggest making sure search engines can fetch it. Never claim the site has 0 URLs in its sitemap in that case.
+- If coverage.pagesNotLoaded shows many pages we couldn't load, say how many and why in plain words, and don't draw site-wide conclusions from the pages we could read.
 - Only cite URLs and numbers from the input.
 - If searchConsole is present, it is the site's real Google traffic: say in the summary whether the site lost clicks after spam or core updates, and tie each finding to it when the pages that lost clicks show that signal (e.g. "12 of the 20 pages that lost the most clicks after the March 2024 spam update are thin"). A traffic drop on pages that look fine may come from something else (a core update, competition): say so instead of raising the risk.
 ${UNTRUSTED}`;
@@ -281,6 +287,8 @@ Rules:
 - Each action targets a group of pages (a section, a template, a pattern) rather than a single page when possible. affectedPattern names it (e.g. "/product/* pages under 200 words"). affectedUrls: up to 5 example URLs from the input.
 - steps: 2-4 concrete steps (what to rewrite, merge, noindex, remove, qualify with rel="sponsored", etc.).
 - For a healthy site, focus on prevention and quick wins, and say so.
+- coverage.sitemapStatus: recommend creating a sitemap only when it is "none". When it is "unreadable", the sitemap exists but our crawler couldn't load it (firewall, anti-bot challenge, timeout): say so, and suggest making sure search engines can fetch it. Never claim the site has 0 URLs in its sitemap in that case.
+- If coverage.pagesNotLoaded shows many pages we couldn't load, say how many and why in plain words, and don't draw site-wide conclusions from the pages we could read.
 - Only cite URLs and numbers from the input. Plain English, short sentences.
 - If searchConsole is present, pages that both lost clicks after an update and were rated weak or spammy come first ("now"): list them in affectedUrls and quote their click loss in "why" (e.g. "lost 120 → 15 clicks per 28 days after the March 2024 spam update"). Flagged pages without a traffic loss come after.
 ${UNTRUSTED}`;

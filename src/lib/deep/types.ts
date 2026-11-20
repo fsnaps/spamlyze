@@ -25,6 +25,16 @@ export type DeepReport = {
   stripeSessionId?: string;
   origin?: string;
   sitemapUrlCount?: number | null;
+  /** "unreadable": a sitemap exists but we couldn't read it (firewall, timeout...). */
+  sitemapStatus?: "found" | "none" | "unreadable";
+  sitemapErrors?: string[];
+  sitemapChallenged?: boolean;
+  /** Why pages couldn't be loaded, by code (timeout, challenge, http_429...). */
+  crawlErrors?: Record<string, number>;
+  /** Pages that timed out or were rate-limited, tried once more after the main crawl. */
+  retryIndexes?: number[];
+  /** Set when an admin ran the report again: no "report ready" email. */
+  rerunAt?: FirebaseFirestore.Timestamp;
   /** Paths from the full sitemap, sampled, for pattern analysis. */
   sitemapSample?: string[];
   /** URLs selected for crawling (homepage first). */

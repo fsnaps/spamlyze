@@ -1,4 +1,4 @@
-import { CrawlError, discoverSite } from "@/lib/check/crawl";
+import { CrawlError, botChallengeMessage, discoverSite, probeCrawlable } from "@/lib/check/crawl";
 import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
 import { createDeepReport } from "@/lib/deep/job";
 import { site } from "@/lib/site";
@@ -19,6 +19,11 @@ export async function POST(request: Request) {
         { error: `${url.hostname} blocks crawlers in its robots.txt, so we can't analyze it.` },
         { status: 400 },
       );
+    }
+    // Some firewalls let the homepage through and challenge every other page: check before charging.
+    if ((await probeCrawlable(site)).blocked) {
+      await track({ deepBlockedAtCheckout: 1 });
+      return Response.json({ error: `${botChallengeMessage(url.hostname)} You were not charged.` }, { status: 400 });
     }
     sitemapUrlCount = site.sitemapUrlCount;
   } catch (err) {

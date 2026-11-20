@@ -104,6 +104,29 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.includes("/old/")) return new Response(html("Old page", 60), htmlHeaders);
   if (url.includes("/coupons/")) return new Response(html("Coupon code", 80, '<a href="https://aff.example/x" rel="sponsored">deal</a>'), htmlHeaders);
   if (url === "https://down.test/") return new Response("oops", { status: 500 });
+  // A site behind a firewall that lets the homepage and a few static pages through and challenges the rest.
+  if (url.startsWith("https://fw.test/")) {
+    const path = new URL(url).pathname;
+    const challenge = () =>
+      new Response("<html><title>Vercel Security Checkpoint</title></html>", {
+        status: 429,
+        headers: { "content-type": "text/html", "x-vercel-mitigated": "challenge" },
+      });
+    if (path === "/")
+      return new Response(
+        html("School finder", 800, Array.from({ length: 40 }, (_, i) => `<a href="/schools/s-${i}">s</a>`).join("") + '<a href="/about">a</a><a href="https://www.fw.test/contact">c</a>'),
+        htmlHeaders,
+      );
+    if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://fw.test/sitemap.xml\n");
+    if (path === "/sitemap.xml") return new Response("<sitemapindex><sitemap><loc>https://fw.test/sitemap/schools.xml</loc></sitemap></sitemapindex>");
+    if (path === "/about" || path === "/contact") return new Response(html("About", 300), htmlHeaders);
+    return challenge();
+  }
+  // www/apex mix: the site answers on the apex, its sitemap lists www URLs.
+  if (url === "https://apex.test/") return new Response(html("Apex", 500), htmlHeaders);
+  if (url === "https://apex.test/robots.txt") return new Response("User-agent: *\nSitemap: https://apex.test/sitemap.xml\n");
+  if (url === "https://apex.test/sitemap.xml")
+    return new Response(`<urlset>${Array.from({ length: 12 }, (_, i) => `<url><loc>https://www.apex.test/p-${i}</loc></url>`).join("")}</urlset>`);
   return new Response("not found", { status: 404 });
 }) as typeof fetch;
 
@@ -219,15 +242,41 @@ assert.equal(r.urls!.length, 77);
 const mid = await startPaid("https://shop.test/");
 r = (await runStep(mid))!; // discover
 r = (await runStep(mid))!; // first crawl slice (40 pages)
-assert.equal(r.crawlCursor, 41);
+assert.equal(r.crawlCursor, 31);
 await attachSearchConsole(mid, gscData, losses);
 r = (await runStep(mid))!;
 const { pageKey } = await import("../src/lib/gsc/data");
-const crawledKeys = new Set(r.urls!.slice(0, 41).map(pageKey));
+const crawledKeys = new Set(r.urls!.slice(0, 31).map(pageKey));
 const pending = losses.slice(0, 7).filter((l) => !crawledKeys.has(pageKey(l.url))).map((l) => l.url);
-assert.deepEqual(r.urls!.slice(41, 41 + pending.length), pending, "losing pages not crawled yet go next");
+assert.deepEqual(r.urls!.slice(31, 31 + pending.length), pending, "losing pages not crawled yet go next");
 assert.equal(new Set(r.urls!.map(pageKey)).size, r.urls!.length, "no duplicates");
-assert.equal(r.crawlCursor, 41);
+assert.equal(r.crawlCursor, 31);
+
+// Anti-bot firewall: caught before payment, and a job that hits it fails (refund + alert) instead of
+// delivering a report built on a handful of pages.
+const { discoverSite, probeCrawlable } = await import("../src/lib/check/crawl");
+const fwSite = await discoverSite(new URL("https://fw.test/"));
+assert.equal(fwSite.sitemapStatus, "unreadable", "a challenged sitemap is not a missing one");
+assert.equal(fwSite.sitemapChallenged, true);
+assert.ok(fwSite.pool.includes("https://fw.test/contact"), "www links count as the same site");
+assert.equal((await probeCrawlable(fwSite)).blocked, true, "probe sees the challenge");
+const fw = await startPaid("https://fw.test/");
+for (let i = 0; i < 20; i++) {
+  r = (await runStep(fw))!;
+  if (r.status !== "running") break;
+}
+assert.equal(r.status, "failed", "low coverage fails instead of delivering");
+assert.match(r.error ?? "", /anti-bot challenge/);
+assert.ok((r.crawlErrors?.challenge ?? 0) >= 40, "reasons are recorded");
+assert.ok(
+  emails.some((e) => e.to === "hello@spamlyze.com" && e.subject.includes("failed: fw.test")),
+  "admin alerted",
+);
+
+const apexSite = await discoverSite(new URL("https://apex.test/"));
+assert.equal(apexSite.sitemapStatus, "found");
+assert.equal(apexSite.sitemapUrlCount, 12, "www sitemap URLs kept and moved onto the apex origin");
+assert.ok(apexSite.pool.every((u) => u.startsWith("https://apex.test/")));
 
 // Small tier: the crawl stops at the tier's page cap, homepage included.
 const small = await startPaid("https://shop.test/", { tier: "small", maxPages: 30, priceCents: 1400 });

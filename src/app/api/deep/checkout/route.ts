@@ -3,6 +3,7 @@ import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
 import { createDeepReport } from "@/lib/deep/job";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
+import { recordCheckoutBlock } from "@/lib/deep/blocks";
 import { deepPricing, tierFor, tierMaxPages } from "@/lib/pricing";
 import { stripe } from "@/lib/stripe";
 
@@ -10,27 +11,32 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { url?: unknown; large?: unknown } | null;
   let url: URL;
   let sitemapUrlCount: number | null;
+  let host: string | null = null;
   try {
     url = normalizeInputUrl(typeof body?.url === "string" ? body.url : "");
+    host = url.hostname;
     // Make sure we can reach the site, and count its pages to price it, before taking payment.
     const site = await discoverSite(url);
     if (site.robotsBlocked) {
-      return Response.json(
-        { error: `${url.hostname} blocks crawlers in its robots.txt, so we can't analyze it.` },
-        { status: 400 },
-      );
+      const error = `${url.hostname} blocks crawlers in its robots.txt, so we can't analyze it.`;
+      await recordCheckoutBlock(url.hostname, "robots", error);
+      return Response.json({ error }, { status: 400 });
     }
     // Some firewalls let the homepage through and challenge every other page: check before charging.
     if ((await probeCrawlable(site)).blocked) {
-      await track({ deepBlockedAtCheckout: 1 });
-      return Response.json({ error: `${botChallengeMessage(url.hostname)} You were not charged.` }, { status: 400 });
+      const error = `${botChallengeMessage(url.hostname)} You were not charged.`;
+      await recordCheckoutBlock(url.hostname, "challenge", error);
+      return Response.json({ error }, { status: 400 });
     }
     sitemapUrlCount = site.sitemapUrlCount;
   } catch (err) {
-    if (err instanceof FetchBlockedError || err instanceof CrawlError) {
-      return Response.json({ error: err.message }, { status: 400 });
+    const error =
+      err instanceof FetchBlockedError || err instanceof CrawlError ? err.message : "We couldn't load your homepage. Is the site online?";
+    // An invalid address isn't worth listing: only sites we found but couldn't crawl.
+    if (host && !(err instanceof FetchBlockedError)) {
+      await recordCheckoutBlock(host, /anti-bot/.test(error) ? "challenge" : "unreachable", error);
     }
-    return Response.json({ error: "We couldn't load your homepage. Is the site online?" }, { status: 400 });
+    return Response.json({ error }, { status: 400 });
   }
 
   try {

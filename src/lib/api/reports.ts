@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { recordCheckoutBlock } from "@/lib/deep/blocks";
 import { CrawlError, botChallengeMessage, discoverSite, probeCrawlable } from "@/lib/check/crawl";
 import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
 import { getDeepPages, getDeepReport, isDeepId } from "@/lib/deep/job";
@@ -113,6 +114,7 @@ export async function createApiReport(ctx: ApiContext, body: { url?: unknown; ma
     const found = await discoverSite(url);
     if (found.robotsBlocked) return apiError(422, "robots_blocked", "This site's robots.txt does not allow SpamlyzeBot. You were not charged.");
     if ((await probeCrawlable(found)).blocked) {
+      await recordCheckoutBlock(url.hostname, "challenge", botChallengeMessage(url.hostname), "api");
       return apiError(422, "bot_challenge", `${botChallengeMessage(url.hostname)} You were not charged.`);
     }
   } catch (err) {

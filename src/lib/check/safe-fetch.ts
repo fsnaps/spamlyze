@@ -35,7 +35,7 @@ export function normalizeInputUrl(raw: string): URL {
 }
 
 /** Throws unless every address the host resolves to is a public unicast address. */
-async function assertPublicHost(hostname: string): Promise<void> {
+export async function assertPublicHost(hostname: string): Promise<void> {
   const host = hostname.replace(/^\[|\]$/g, "");
   let addresses: string[];
   if (ipaddr.isValid(host)) {
@@ -114,4 +114,24 @@ async function readCapped(res: Response): Promise<string> {
     chunks.push(value);
   }
   return new TextDecoder("utf-8", { fatal: false }).decode(Buffer.concat(chunks));
+}
+
+/**
+ * POSTs JSON to a customer's URL (webhooks) with the same SSRF protection as safeFetch:
+ * public addresses and standard ports only, no redirects followed, time capped.
+ * Returns the HTTP status; throws FetchBlockedError for a refused address, or on network errors.
+ */
+export async function safePost(url: URL, body: string, headers: Record<string, string>, timeoutMs = 10_000): Promise<number> {
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new FetchBlockedError("Unsupported URL.");
+  if (url.port && url.port !== "80" && url.port !== "443") throw new FetchBlockedError("Only standard web ports are allowed.");
+  await assertPublicHost(url.hostname);
+  const res = await fetch(url, {
+    method: "POST",
+    redirect: "manual",
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { "user-agent": USER_AGENT, "content-type": "application/json", ...headers },
+    body,
+  });
+  await res.body?.cancel();
+  return res.status;
 }

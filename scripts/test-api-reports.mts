@@ -29,6 +29,8 @@ const html = (title: string, words: number) =>
   `<html lang="en"><head><title>${title}</title></head><body><main><h1>${title}</h1><p>${Array.from({ length: words }, (_, i) => `w${i % 40}`).join(" ")}</p></main></body></html>`;
 const sitemap = (host: string) => Array.from({ length: 20 }, (_, i) => `https://${host}/guides/guide-${i}`);
 let breakSite = "";
+const hooks: { headers: Headers; body: string }[] = [];
+let hookStatus = 200;
 
 function claudeReply(body: { system: string; messages: { content: string }[] }) {
   const input = body.messages[0].content;
@@ -64,6 +66,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     return claudeReply(JSON.parse(body));
   }
   const u = new URL(url);
+  if (u.hostname === "hooks.test") {
+    hooks.push({ headers: new Headers(init?.headers), body: String(init?.body) });
+    return new Response("ok", { status: hookStatus });
+  }
   const page = { headers: { "content-type": "text/html" } };
   if (u.hostname === breakSite) return new Response("oops", { status: 500 });
   if (u.pathname === "/robots.txt") {
@@ -83,14 +89,23 @@ const { addCredits, listLedger } = await import("../src/lib/api/credits");
 const { POST: createReport } = await import("../src/app/api/v1/reports/route");
 const { GET: readReport } = await import("../src/app/api/v1/reports/[id]/route");
 const { POST: taskRoute } = await import("../src/app/api/internal/deep-step/[id]/route");
+const { POST: webhookTask } = await import("../src/app/api/internal/webhook/[account]/[event]/route");
+const webhookApi = await import("../src/app/api/v1/webhook/route");
+const { createHmac } = await import("node:crypto");
 
 const acct = await createApiAccount({ email: "r@example.com", name: "Agency R" });
 const { key } = await createApiKey(acct, "reports");
 const bal = async () => (await accounts().doc(acct).get()).get("balanceCents") as number;
-const post = (body: unknown, k = key) =>
+const post = (body: unknown, k = key, idem?: string) =>
   createReport(new Request("https://spamlyze.com/api/v1/reports", {
-    method: "POST", headers: { authorization: `Bearer ${k}`, "content-type": "application/json" }, body: JSON.stringify(body),
+    method: "POST",
+    headers: { authorization: `Bearer ${k}`, "content-type": "application/json", ...(idem ? { "idempotency-key": idem } : {}) },
+    body: JSON.stringify(body),
   }));
+const hookReq = (method: string, body?: unknown) =>
+  new Request("https://spamlyze.com/api/v1/webhook", {
+    method, headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body),
+  });
 const read = (id: string, query = "", k = key) =>
   readReport(new Request(`https://spamlyze.com/api/v1/reports/${id}${query}`, { headers: { authorization: `Bearer ${k}` } }), {
     params: Promise.resolve({ id }),
@@ -98,13 +113,23 @@ const read = (id: string, query = "", k = key) =>
 type Body = Record<string, unknown> & { id: string; status: string; error?: { code: string } | string | null; refunded: boolean; balance: { cents: number } };
 const json = async (r: Response) => (await r.json()) as Body;
 const code = async (r: Response) => ((await r.json()) as { error: { code: string } }).error.code;
-async function drain() {
+/** Delivers queued tasks. Webhook retries only when asked (Cloud Tasks would wait minutes first). */
+async function drain(webhooks = true) {
+  const held: Task[] = [];
   for (let i = 0; i < 60 && queued.length; i++) {
     const t = queued.shift()!;
-    const id = t.httpRequest.url.split("/").pop()!;
-    const res = await taskRoute(new Request(t.httpRequest.url, { method: "POST", headers: t.httpRequest.headers }), { params: Promise.resolve({ id }) } as never);
+    if (!webhooks && t.httpRequest.url.includes("/internal/webhook/") && t.name.match(/-[1-9]\d*$/)) {
+      held.push(t);
+      continue;
+    }
+    const parts = t.httpRequest.url.split("/");
+    const req = new Request(t.httpRequest.url, { method: "POST", headers: t.httpRequest.headers });
+    const res = t.httpRequest.url.includes("/internal/webhook/")
+      ? await webhookTask(req, { params: Promise.resolve({ account: parts.at(-2)!, event: parts.at(-1)! }) } as never)
+      : await taskRoute(req, { params: Promise.resolve({ id: parts.at(-1)! }) } as never);
     assert.equal(res.status, 200);
   }
+  queued.push(...held);
 }
 
 // Without the server driver the API refuses Deep Reports (they would never advance).
@@ -129,14 +154,43 @@ assert.equal(r.status, 422);
 assert.equal(await code(r), "robots_blocked");
 assert.equal(await bal(), 5000);
 
+// Webhook: only public http(s) URLs, then a signing secret comes back.
+assert.equal(await code(await webhookApi.PUT(hookReq("PUT", { url: "ftp://hooks.test/x" }))), "invalid_webhook_url");
+assert.equal(await code(await webhookApi.PUT(hookReq("PUT", { url: "https://localhost/x" }))), "invalid_webhook_url");
+r = await webhookApi.PUT(hookReq("PUT", { url: "https://hooks.test/spamlyze" }));
+assert.equal(r.status, 200);
+const { secret } = (await r.json()) as { secret: string };
+assert.match(secret, /^whsec_/);
+const again = (await (await webhookApi.PUT(hookReq("PUT", { url: "https://hooks.test/spamlyze?v=2" }))).json()) as { secret: string };
+assert.equal(again.secret, secret, "changing the URL keeps the secret");
+
 // A real report: 202 at once, charged $12, then the queue drives it to the end.
-r = await post({ url: "https://garden.test/", maxPages: 50 });
+r = await post({ url: "https://garden.test/", maxPages: 50 }, key, "order-42");
 assert.equal(r.status, 202);
 const created = await json(r);
 assert.equal(created.status, "running");
 assert.equal(created.balance.cents, 3800);
 assert.equal(r.headers.get("location"), `https://spamlyze.com/v1/reports/${created.id}`);
 assert.equal(queued.length, 1);
+
+// Idempotency-Key: a retried POST gets the same report back and is not charged again.
+r = await post({ url: "https://garden.test/", maxPages: 50 }, key, "order-42");
+assert.equal(r.status, 202);
+assert.equal(r.headers.get("idempotent-replayed"), "true");
+assert.equal(r.headers.get("location"), `https://spamlyze.com/v1/reports/${created.id}`);
+assert.equal((await json(r)).id, created.id);
+assert.equal(await bal(), 3800, "no second charge");
+assert.equal(queued.length, 1, "no second report");
+r = await post({ url: "https://other.test/" }, key, "order-42");
+assert.equal(r.status, 422);
+assert.equal(await code(r), "idempotency_key_reused");
+assert.equal(await code(await post({ url: "garden.test" }, key, "bad key with spaces")), "invalid_idempotency_key");
+// A refused request doesn't burn the key: fixed and resent with the same key, it runs.
+r = await post({ url: "norobots.test" }, key, "order-43");
+assert.equal(r.status, 422);
+r = await post({ url: "norobots.test" }, key, "order-43");
+assert.equal(await code(r), "robots_blocked", "ran again, not replayed");
+
 await drain();
 r = await read(created.id);
 const done = await json(r);
@@ -148,6 +202,20 @@ r = await read(created.id, "?pages=true");
 const withPages = await json(r);
 assert.equal((withPages.pages as unknown[]).length, 21);
 assert.equal(await bal(), 3800, "reading is free");
+
+// The webhook got report.done once, signed with the account's secret.
+assert.equal(hooks.length, 1);
+const hook = hooks[0];
+assert.equal(hook.headers.get("spamlyze-event"), "report.done");
+const [t, v1] = hook.headers.get("spamlyze-signature")!.split(",").map((x) => x.split("=")[1]);
+assert.equal(v1, createHmac("sha256", secret).update(`${t}.${hook.body}`).digest("hex"));
+const event = JSON.parse(hook.body) as { type: string; data: { id: string; status: string; analysis: unknown } };
+assert.equal(event.type, "report.done");
+assert.equal(event.data.id, created.id);
+assert.equal(event.data.status, "done");
+assert.ok(event.data.analysis);
+const hookInfo = (await (await webhookApi.GET(hookReq("GET"))).json()) as { recentDeliveries: { status: string }[] };
+assert.equal(hookInfo.recentDeliveries[0].status, "delivered");
 
 // Same domain within the hour: 429, not charged.
 r = await post({ url: "garden.test" });
@@ -168,12 +236,22 @@ const flaky = await json(r);
 assert.equal(r.status, 202);
 assert.equal(await bal(), 2600);
 breakSite = "flaky.test";
-await drain();
+hookStatus = 500; // the customer's server is down at first: we retry
+await drain(false);
 const failed = await json(await read(flaky.id));
 assert.equal(failed.status, "failed");
 assert.equal(failed.refunded, true);
 assert.equal(await bal(), 3800);
 breakSite = "";
+hookStatus = 200;
+assert.equal(hooks.length, 2, "first attempt failed");
+assert.equal(queued.length, 1, "a retry is scheduled");
+await drain();
+assert.equal(hooks.length, 3);
+assert.equal(JSON.parse(hooks[2].body).type, "report.failed");
+assert.equal(JSON.parse(hooks[2].body).data.refunded, true);
+r = await webhookApi.DELETE(hookReq("DELETE"));
+assert.equal(r.status, 200);
 
 // Running cap per account: the second report waits, nothing charged.
 process.env.API_MAX_RUNNING_REPORTS = "1";

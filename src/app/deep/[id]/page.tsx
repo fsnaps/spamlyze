@@ -13,6 +13,8 @@ import { confirmPayment, getDeepPages, getDeepReport, isDeepId } from "@/lib/dee
 import { publicStatus } from "@/lib/deep/status";
 import type { DeepPage, DeepReport } from "@/lib/deep/types";
 import { pageKey } from "@/lib/gsc/data";
+import { canViewDeep, maskEmail, privateModeAvailable } from "@/lib/deep/access";
+import { DeepPrivacyToggle, DeepPrivateGate } from "@/components/deep-privacy";
 
 export const metadata: Metadata = {
   title: "Deep Report",
@@ -103,6 +105,14 @@ async function DeepView({
     }
   }
 
+  if (!(await canViewDeep(id, report))) {
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 sm:px-6">
+        <DeepPrivateGate id={id} masked={maskEmail(report.email ?? "")} expired={query.access === "expired"} />
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 sm:px-6">
       <p className="text-sm text-muted">Deep Report{report.maxPages ? ` · up to ${report.maxPages} pages` : ""}</p>
@@ -123,7 +133,12 @@ async function DeepView({
             </p>
           </div>
         ) : report.status === "done" ? (
-          <FinishedReport id={id} report={report} gscResult={gscResult} />
+          <>
+            {privateModeAvailable(report) && (
+              <DeepPrivacyToggle id={id} isPrivate={Boolean(report.private)} masked={maskEmail(report.email!)} />
+            )}
+            <FinishedReport id={id} report={report} gscResult={gscResult} />
+          </>
         ) : (
           <>
             {report.status === "running" && <GscWhileRunning id={id} report={report} result={gscResult} />}

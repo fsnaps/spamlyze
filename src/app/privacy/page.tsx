@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Sites you analyze:</strong> the URL you submit, the public pages we crawl
-            from it, and the report we generate. Reports are reachable by anyone who has their link.
+            from it, and the report we generate. Reports are reachable by anyone who has their link, unless you make your Deep Report private.
           </li>
           <li>
             <strong>Google Search Console data</strong> (only if you connect it): the list of

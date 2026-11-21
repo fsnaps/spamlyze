@@ -22,6 +22,10 @@ export type DeepReport = {
   paidAt?: FirebaseFirestore.Timestamp;
   finishedAt?: FirebaseFirestore.Timestamp;
   email?: string;
+  /** Set by the buyer: only browsers with the access cookie (or an admin) can open it. */
+  private?: boolean;
+  /** Last sign-in link sent for a private report, to throttle requests. */
+  accessEmailAt?: FirebaseFirestore.Timestamp;
   stripeSessionId?: string;
   origin?: string;
   sitemapUrlCount?: number | null;

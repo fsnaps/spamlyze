@@ -10,18 +10,12 @@ import { formatUsd, LARGE_TIER_MAX_PAGES, tierFor, tierMaxPages } from "@/lib/pr
 import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
+import { SIGNAL_LABELS } from "@/lib/check/labels";
+import { ReportEmailForm } from "@/components/report-email-form";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
   robots: { index: false, follow: false },
-};
-
-const SIGNAL_LABELS: Record<string, string> = {
-  scaled_content: "Scaled content",
-  thin_doorway: "Thin and doorway pages",
-  site_reputation_abuse: "Site reputation abuse",
-  link_schemes: "Link schemes",
-  expired_domain: "Expired domain signals",
 };
 
 const LEVEL_STYLES: Record<string, string> = {
@@ -273,6 +267,8 @@ async function Report({
             </div>
           </section>
 
+          <ReportEmailForm checkId={id} domain={check.domain} />
+
           <GscSection
             connectHref={`/api/gsc/connect?check=${id}`}
             gsc={gsc}
@@ -338,14 +334,6 @@ async function Report({
             <WaitlistForm source="report" site={check.domain} cta="Notify me at launch" />
           )}
         </div>
-        {deepReportEnabled() && (
-          <div className="mt-4 border-t border-line pt-5">
-            <p className="text-sm text-muted">Not now? Get a heads-up when the next spam update rolls out.</p>
-            <div className="mt-3">
-              <WaitlistForm source="report" site={check.domain} cta="Keep me posted" />
-            </div>
-          </div>
-        )}
       </section>
 
       <p className="mt-8 text-xs text-muted">

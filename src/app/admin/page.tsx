@@ -108,8 +108,8 @@ async function Dashboard() {
         />
         <Tile
           label="Email signups"
-          value={String(t.signupsWaitlist + t.signupsReport)}
-          hint={`${t.signupsReport} from reports`}
+          value={String(t.signupsWaitlist + t.signupsReport + t.reportEmails)}
+          hint={`${t.reportEmails} report emails after a Quick Check (${pct(t.reportEmails, t.quickChecks)}) · ${t.signupsReport} other from reports`}
         />
         <Tile
           label="Search Console connected"
@@ -147,7 +147,7 @@ async function Dashboard() {
                 <td className="px-4 py-2">{usd((d.revenueCents ?? 0) / 100)}</td>
                 <td className="px-4 py-2">{usd(apiCostUsd(d))}</td>
                 <td className="px-4 py-2">
-                  {(d.signupsWaitlist ?? 0) + (d.signupsReport ?? 0) + (d.signupsMonitoring ?? 0) + (d.signupsApi ?? 0)}
+                  {(d.signupsWaitlist ?? 0) + (d.signupsReport ?? 0) + (d.reportEmails ?? 0) + (d.signupsMonitoring ?? 0) + (d.signupsApi ?? 0)}
                 </td>
               </tr>
             ))}

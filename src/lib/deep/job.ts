@@ -11,6 +11,7 @@ import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./a
 import { sendDeepReady, sendDeepStarted } from "./emails";
 import { enqueueDeepStep } from "./tasks";
 import { refundCharge } from "@/lib/api/credits";
+import { queueReportEvent } from "@/lib/api/webhook-events";
 import { notifyAdmin } from "@/lib/notify";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
@@ -251,13 +252,17 @@ export async function runStep(id: string): Promise<DeepReport | null> {
   try {
     const patch = report.gscPending ? mergeGsc(report) : await PHASES[report.phase](id, report);
     await ref.update({ ...patch, leaseUntil: 0, error: FieldValue.delete() });
-    if (patch.robotsBlocked === true && report.accountId) await refund(id, report);
+    if (patch.robotsBlocked === true && report.accountId) {
+      await refund(id, report);
+      await queueReportEvent(id, report.accountId, "report.failed");
+    }
     // A report updated with Search Console data was already delivered once: no second email.
     if (patch.status === "done" && !report.finishedAt && !report.rerunAt) {
       const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
       await Promise.all([
         report.email ? sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel) : null,
         track({ deepDone: 1 }),
+        report.accountId && patch.robotsBlocked !== true ? queueReportEvent(id, report.accountId, "report.done") : null,
       ]);
     }
   } catch (err) {
@@ -280,6 +285,7 @@ export async function runStep(id: string): Promise<DeepReport | null> {
     if (failed) {
       await refund(id, report);
       await Promise.all([
+        report.accountId ? queueReportEvent(id, report.accountId, "report.failed") : null,
         track({ deepFailed: 1 }),
         notifyAdmin("deep", `Deep Report failed: ${report.domain}`, [`Reason: ${message}`, "The buyer was refunded automatically."], `${site.url}/deep/${id}`),
       ]);

@@ -18,6 +18,7 @@ export const STAT_KEYS = [
   "signupsReport",
   "signupsMonitoring",
   "signupsApi",
+  "reportEmails",
   "gscConnected",
   "gscStarts",
   "gscFailed",

@@ -26,6 +26,11 @@ export default function PrivacyPage() {
             domain.
           </li>
           <li>
+            <strong>Report by email:</strong> if you ask us to email you a free report, your email
+            address and the site you checked. We send you the report and alerts when Google rolls out a
+            spam update. You can unsubscribe from any alert in one click.
+          </li>
+          <li>
             <strong>Account:</strong> when you sign in with Google, your name, email address and
             profile picture.
           </li>
@@ -96,7 +101,7 @@ export default function PrivacyPage() {
           <li>Stripe (payments)</li>
           <li>Google reCAPTCHA (bot protection on the free check, under Google&apos;s own privacy policy)</li>
           <li>Google Analytics (audience measurement, only with your consent)</li>
-          <li>Our email provider (waitlist and account emails)</li>
+          <li>Our email provider (waitlist, report and account emails)</li>
         </ul>
         <p>We share data with these providers only as needed to run {site.name}.</p>
 

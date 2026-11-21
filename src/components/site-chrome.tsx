@@ -37,7 +37,7 @@ export function Footer() {
         <p>
           © 2026 {site.name}. Not affiliated with Google.
         </p>
-        <nav className="flex gap-5">
+        <nav className="flex flex-wrap gap-x-5 gap-y-2">
           <Link href="/privacy" className="hover:text-foreground">
             Privacy
           </Link>

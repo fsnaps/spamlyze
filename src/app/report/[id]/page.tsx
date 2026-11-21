@@ -80,7 +80,7 @@ function Coverage({
   return (
     <section className="mt-4 rounded-2xl border border-line bg-surface p-5 sm:p-6">
       <p className="font-semibold">Quick Check or Deep Report?</p>
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <div className="rounded-xl border border-line p-4">
           <p className="font-semibold">This Quick Check</p>
           <ul className="mt-2 space-y-1.5 text-muted">
@@ -298,7 +298,7 @@ async function Report({
                 We rated your site on 5 spam signals{flagged > 0 ? `: ${flagged} need attention` : ""}. <a href="#unlock" className="font-semibold text-accent underline underline-offset-4">Unlock the ratings for free</a>
               </p>
             )}
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               {a.signals.map((s, i) => (
                 <div
                   key={s.id}

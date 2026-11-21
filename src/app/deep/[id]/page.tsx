@@ -278,7 +278,7 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
 
       <section className="mt-12">
         <h2 className="text-2xl font-semibold tracking-tight">Spam signals</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {a.signals.map((s) => (
             <div key={s.id} className="break-inside-avoid rounded-2xl border border-line bg-surface p-6">
               <div className="flex items-center justify-between gap-3">

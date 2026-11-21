@@ -126,7 +126,7 @@ export default function Home() {
         <p className="mt-3 max-w-2xl text-muted">
           Each signal maps to a spam policy that recent updates have enforced.
         </p>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {signals.map((s) => (
             <div key={s.title} className="rounded-2xl border border-line bg-surface p-6">
               <h3 className="font-semibold">{s.title}</h3>

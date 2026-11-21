@@ -19,6 +19,11 @@ env:
     value: "19"
     availability:
       - RUNTIME
+  # Brevo list for spam update alerts (email asked after a Quick Check).
+  - variable: BREVO_ALERTS_LIST_ID
+    value: "20"
+    availability:
+      - RUNTIME
   - variable: BREVO_API_KEY
     secret: BREVO_API_KEY
     availability:

@@ -6,8 +6,9 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { addToBrevoWaitlist } from "@/lib/brevo";
 import { clientIp } from "@/lib/check/guard";
 import { getCheck } from "@/lib/check/run";
-import { sendQuickReport } from "@/lib/check/report-email";
+import { scheduleFollowUp, sendQuickReport, FOLLOW_UP_HOURS } from "@/lib/check/report-email";
 import { unlockCookie } from "@/lib/check/unlock";
+import { cancelFollowUp } from "@/lib/check/follow-up";
 import { track } from "@/lib/stats";
 import { db } from "@/lib/firebase-admin";
 
@@ -196,11 +197,25 @@ export async function emailQuickReport(
   }
 
   await unlockInBrowser(checkId);
-  const [sent] = await Promise.all([
+  // One follow-up per person: a newer Quick Check replaces a pending one.
+  await cancelFollowUp(email);
+  const [sent, followUpId] = await Promise.all([
     sendQuickReport(email, checkId, check),
+    scheduleFollowUp(email, checkId, check),
     addToBrevoWaitlist(email, "alerts"),
     track({ reportEmails: 1 }),
   ]);
+  if (followUpId) {
+    // Kept so a Deep Report purchase (or a newer Quick Check) can cancel it.
+    await db()
+      .collection("waitlist")
+      .doc(emailId)
+      .set(
+        { followUpMessageId: followUpId, followUpAt: Timestamp.fromMillis(Date.now() + FOLLOW_UP_HOURS * 3_600_000) },
+        { merge: true },
+      )
+      .catch((err) => console.error("follow-up id write failed", err));
+  }
   return {
     status: "success",
     message: sent

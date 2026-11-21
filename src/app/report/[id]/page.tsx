@@ -106,6 +106,29 @@ function Coverage({
   );
 }
 
+/**
+ * What the Deep Report adds to a signal: the affected pages across the whole site. The blurred
+ * figure is a stand-in, never a real count.
+ */
+function SiteWidePages({ total }: { total: number | null }) {
+  return (
+    <a
+      href="#deep-report"
+      className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-dashed border-line px-3 py-2 text-sm hover:border-accent print:hidden"
+    >
+      <span className="min-w-0 text-muted">
+        Affected pages{" "}
+        <span aria-hidden className="select-none whitespace-nowrap font-semibold text-foreground blur-[4px]">
+          24 of {total ? total.toLocaleString("en-US") : "500"}
+        </span>
+      </span>
+      <span className="shrink-0 font-semibold text-accent">
+        <span aria-hidden>🔒</span> Deep Report
+      </span>
+    </a>
+  );
+}
+
 /** Up-front warning next to the score: how little of the site the estimate is based on. */
 function CoverageWarning({ sampled, sitemapCount }: { sampled: number; sitemapCount: number | null }) {
   const c = coverage(sampled, sitemapCount);
@@ -296,6 +319,7 @@ async function Report({
                     <>
                       <p className="mt-2 text-sm leading-relaxed text-muted">{s.finding}</p>
                       <UrlList urls={s.exampleUrls} />
+                      <SiteWidePages total={sitemapCount === null ? null : sitemapCount + 1} />
                     </>
                   ) : (
                     <LockedLines lines={1} />

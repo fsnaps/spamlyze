@@ -53,3 +53,17 @@ export function sendDeepReady(to: string, id: string, domain: string, score?: nu
     ),
   );
 }
+
+export function sendDeepSignIn(to: string, id: string, domain: string, token: string) {
+  const d = escape(domain);
+  return sendEmail(
+    to,
+    `Your sign-in link for the ${domain} Deep Report`,
+    layout(
+      `Open your private Deep Report`,
+      `<p style="margin:0;line-height:1.6;color:#57534e">Someone (hopefully you) asked to open the private Deep Report for ${d}. This link works for one hour and keeps this browser signed in to the report. If you didn't ask for it, you can ignore this email.</p>`,
+      `${site.url}/api/deep/${id}/access?k=${encodeURIComponent(token)}`,
+      "Open my report",
+    ),
+  );
+}

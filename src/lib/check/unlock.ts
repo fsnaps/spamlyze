@@ -6,7 +6,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const unlockCookie = (checkId: string) => `slq_${checkId}`;
 
 function secret() {
-  return process.env.REPORT_UNLOCK_SECRET || process.env.IP_HASH_SALT || "spamlyze";
+  // IP_HASH_SALT isn't set in production: without a real secret anyone could forge unlock links.
+  return process.env.REPORT_UNLOCK_SECRET || process.env.API_KEY_PEPPER || process.env.IP_HASH_SALT || "spamlyze";
 }
 
 export function unlockToken(checkId: string): string {

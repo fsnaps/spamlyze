@@ -12,6 +12,7 @@ import { sendDeepReady, sendDeepStarted } from "./emails";
 import { enqueueDeepStep } from "./tasks";
 import { refundCharge } from "@/lib/api/credits";
 import { notifyAdmin } from "@/lib/notify";
+import { cancelFollowUp } from "@/lib/check/follow-up";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
 import { LARGE_TIER_MAX_PAGES } from "@/lib/pricing";
@@ -121,6 +122,7 @@ export async function confirmPayment(id: string, sessionId: string): Promise<boo
     await Promise.all([
       enqueueDeepStep(id, 0),
       email ? sendDeepStarted(email, id, started.domain, started.maxPages) : null,
+      email ? cancelFollowUp(email) : null,
       track({ deepPaid: 1, revenueCents: amount }),
       notifyAdmin(
         "deep",

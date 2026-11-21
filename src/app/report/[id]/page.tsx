@@ -11,6 +11,7 @@ import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
 import { SIGNAL_LABELS } from "@/lib/check/labels";
+import { coverage } from "@/lib/check/coverage";
 import { cookies } from "next/headers";
 import { LockedLines, ReportEmailForm, UnlockLink } from "@/components/report-email-form";
 import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
@@ -75,24 +76,11 @@ function Coverage({
 }) {
   // Sitemap URLs plus the homepage.
   const total = sitemapCount === null ? null : sitemapCount + 1;
-  const share = total ? Math.min(100, Math.max(1, Math.round((sampled / total) * 100))) : null;
   const deepCovers = total !== null && total <= deepPages ? `All ${total.toLocaleString("en-US")} pages` : `Up to ${deepPages} pages`;
   return (
     <section className="mt-4 rounded-2xl border border-line bg-surface p-5 sm:p-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="font-semibold">
-          This score is an estimate from {sampled} pages{total && total > sampled ? ` out of ${total.toLocaleString("en-US")}` : ""}
-        </p>
-        {share !== null && <p className="text-sm text-muted">{share}% of your site seen</p>}
-      </div>
-      {share !== null ? (
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" aria-hidden>
-          <div className="h-full rounded-full bg-accent" style={{ width: `${share}%` }} />
-        </div>
-      ) : (
-        <p className="mt-1 text-sm text-muted">We found no sitemap, so we can&apos;t tell how much of your site that is.</p>
-      )}
-      <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+      <p className="font-semibold">Quick Check or Deep Report?</p>
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <div className="rounded-xl border border-line p-4">
           <p className="font-semibold">This Quick Check</p>
           <ul className="mt-2 space-y-1.5 text-muted">
@@ -115,6 +103,40 @@ function Coverage({
         {cta}
       </a>
     </section>
+  );
+}
+
+/** Up-front warning next to the score: how little of the site the estimate is based on. */
+function CoverageWarning({ sampled, sitemapCount }: { sampled: number; sitemapCount: number | null }) {
+  const c = coverage(sampled, sitemapCount);
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-900 dark:text-amber-200">
+      <div className="flex items-start gap-3">
+        <svg aria-hidden viewBox="0 0 20 20" className="mt-0.5 size-5 shrink-0 fill-amber-500">
+          <path d="M8.26 2.9a2 2 0 0 1 3.48 0l6.3 11.2A2 2 0 0 1 16.3 17H3.7a2 2 0 0 1-1.74-2.9ZM10 7a1 1 0 0 0-1 1v3a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1Zm0 8a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Z" />
+        </svg>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">
+            {c.total
+              ? `Based on ${sampled} of ${c.total.toLocaleString("en-US")} pages (${c.share}% of your site)`
+              : `Based on ${sampled} pages only`}
+          </p>
+          {c.share !== null && (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-amber-500/20" aria-hidden>
+              <div className="h-full rounded-full bg-amber-500" style={{ width: `${c.share}%` }} />
+            </div>
+          )}
+          <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-200/80">
+            {c.total
+              ? `The other ${c.unseen.toLocaleString("en-US")} pages weren't checked, including any that are losing traffic.`
+              : "We found no sitemap, so we can't tell how much of your site that is. Pages losing traffic weren't checked."}{" "}
+            <a href="#deep-report" className="font-semibold underline underline-offset-4 print:hidden">
+              Check every page
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -187,7 +209,12 @@ async function Report({
                 <LevelBadge level={a.riskLevel} />
               </div>
             </div>
-            <p className="sl-fade-up leading-relaxed [animation-delay:300ms]">{a.summary}</p>
+            <div className="sl-fade-up min-w-0 flex-1 [animation-delay:300ms]">
+              <p className="leading-relaxed">{a.summary}</p>
+              <div className="mt-4">
+                <CoverageWarning sampled={check.pagesAnalyzed} sitemapCount={sitemapCount} />
+              </div>
+            </div>
           </section>
           <ReportEmailForm checkId={id} unlocked={unlocked} issues={a.topIssues.length} flagged={flagged} />
           <Coverage
@@ -231,7 +258,7 @@ async function Report({
             <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-dashed border-line p-5 text-sm sm:flex-row sm:items-center sm:justify-between">
               <p className="text-muted">
                 {unseen > 0
-                  ? `These come from ${check.pagesAnalyzed} pages. The other ${unseen.toLocaleString("en-US")} ${unseen === 1 ? "page wasn't" : "pages weren't"} checked.`
+                  ? `These come from ${check.pagesAnalyzed} pages. The other ${unseen.toLocaleString("en-US")} ${unseen === 1 ? "page wasn't" : "pages weren't"} checked, including any that are losing traffic.`
                   : `These come from a sample of ${check.pagesAnalyzed} pages.`}{" "}
                 The Deep Report reviews every page it covers and lists the exact ones to fix, in order.
               </p>

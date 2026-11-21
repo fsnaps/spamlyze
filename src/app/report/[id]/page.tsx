@@ -11,7 +11,9 @@ import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
 import { SIGNAL_LABELS } from "@/lib/check/labels";
-import { ReportEmailForm } from "@/components/report-email-form";
+import { cookies } from "next/headers";
+import { LockedLines, ReportEmailForm, UnlockLink } from "@/components/report-email-form";
+import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -154,6 +156,9 @@ async function Report({
   // Pages of the site the Quick Check never saw (sitemap URLs plus the homepage).
   const unseen = sitemapCount === null ? 0 : Math.max(0, sitemapCount + 1 - check.pagesAnalyzed);
   const range = scoreRange(a?.riskScore ?? 0, check.pagesAnalyzed, sitemapCount);
+  const unlocked =
+    (await cookies()).has(unlockCookie(id)) || validUnlockToken(id, typeof query.u === "string" ? query.u : undefined);
+  const flagged = a ? a.signals.filter((s) => s.level === "moderate" || s.level === "high").length : 0;
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
   return (
@@ -184,6 +189,7 @@ async function Report({
             </div>
             <p className="sl-fade-up leading-relaxed [animation-delay:300ms]">{a.summary}</p>
           </section>
+          <ReportEmailForm checkId={id} unlocked={unlocked} issues={a.topIssues.length} flagged={flagged} />
           <Coverage
             sampled={check.pagesAnalyzed}
             sitemapCount={sitemapCount}
@@ -204,12 +210,21 @@ async function Report({
                   <h3 className="font-semibold">
                     {i + 1}. {t.title}
                   </h3>
-                  <p className="mt-2 text-muted">{t.why}</p>
-                  <p className="mt-2">
-                    <span className="font-semibold">Fix: </span>
-                    {t.fix}
-                  </p>
-                  <UrlList urls={t.exampleUrls} />
+                  {unlocked || i === 0 ? (
+                    <>
+                      <p className="mt-2 text-muted">{t.why}</p>
+                      <p className="mt-2">
+                        <span className="font-semibold">Fix: </span>
+                        {t.fix}
+                      </p>
+                      <UrlList urls={t.exampleUrls} />
+                    </>
+                  ) : (
+                    <>
+                      <LockedLines />
+                      <UnlockLink />
+                    </>
+                  )}
                 </li>
               ))}
             </ol>
@@ -228,6 +243,11 @@ async function Report({
 
           <section className="mt-12">
             <h2 className="text-2xl font-semibold tracking-tight">Spam signals</h2>
+            {!unlocked && (
+              <p className="mt-1 text-sm text-muted">
+                We rated your site on 5 spam signals{flagged > 0 ? `: ${flagged} need attention` : ""}. <a href="#unlock" className="font-semibold text-accent underline underline-offset-4">Unlock the ratings for free</a>
+              </p>
+            )}
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {a.signals.map((s, i) => (
                 <div
@@ -237,10 +257,22 @@ async function Report({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="font-semibold">{SIGNAL_LABELS[s.id] ?? s.id}</h3>
-                    <LevelBadge level={s.level} />
+                    {unlocked ? (
+                      <LevelBadge level={s.level} />
+                    ) : (
+                      <span className="rounded-full bg-stone-500/10 px-2.5 py-0.5 text-xs font-semibold text-muted">
+                        <span aria-hidden>🔒</span> Locked
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">{s.finding}</p>
-                  <UrlList urls={s.exampleUrls} />
+                  {unlocked ? (
+                    <>
+                      <p className="mt-2 text-sm leading-relaxed text-muted">{s.finding}</p>
+                      <UrlList urls={s.exampleUrls} />
+                    </>
+                  ) : (
+                    <LockedLines lines={1} />
+                  )}
                 </div>
               ))}
               <div className="rounded-2xl border border-dashed border-line p-6">
@@ -266,8 +298,6 @@ async function Report({
               </div>
             </div>
           </section>
-
-          <ReportEmailForm checkId={id} domain={check.domain} />
 
           <GscSection
             connectHref={`/api/gsc/connect?check=${id}`}

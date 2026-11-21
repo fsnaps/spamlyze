@@ -26,8 +26,8 @@ export default function PrivacyPage() {
             domain.
           </li>
           <li>
-            <strong>Report by email:</strong> if you ask us to email you a free report, your email
-            address and the site you checked. We send you the report and alerts when Google rolls out a
+            <strong>Report by email:</strong> if you give your email to unlock a detailed Quick Check, your email
+            address and the site you checked. We email you the detailed Quick Check and alerts when Google rolls out a
             spam update. You can unsubscribe from any alert in one click.
           </li>
           <li>

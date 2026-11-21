@@ -1,12 +1,13 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { addToBrevoWaitlist } from "@/lib/brevo";
 import { clientIp } from "@/lib/check/guard";
 import { getCheck } from "@/lib/check/run";
 import { sendQuickReport } from "@/lib/check/report-email";
+import { unlockCookie } from "@/lib/check/unlock";
 import { track } from "@/lib/stats";
 import { db } from "@/lib/firebase-admin";
 
@@ -97,14 +98,27 @@ export async function joinWaitlist(
 export type ReportEmailState = WaitlistState;
 
 // The form sends mail to an address typed by a visitor: cap it so it can't be used to spam people.
-const REPORT_EMAILS_PER_CHECK = 3;
+// A Quick Check is shared by everyone who checks the same domain within 24 h, hence the per-check margin.
+const REPORT_EMAILS_PER_CHECK = 25;
 const REPORT_EMAILS_PER_IP_DAILY = 5;
 
 class LimitError extends Error {}
 
+/** Unlocks the detailed Quick Check in this browser for a year. */
+async function unlockInBrowser(checkId: string) {
+  (await cookies()).set(unlockCookie(checkId), "1", {
+    path: `/report/${checkId}`,
+    maxAge: 365 * 86_400,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+}
+
 /**
- * Optional step after a Quick Check: emails the full report to the visitor and signs them up for
- * spam update alerts (Firestore `waitlist` + Brevo). The report itself is never gated on this.
+ * Email step under a Quick Check score: unlocks the detailed Quick Check (all issues and spam
+ * signals) on the page, emails it, and signs the visitor up for spam update alerts
+ * (Firestore `waitlist` + Brevo).
  */
 export async function emailQuickReport(
   _prev: ReportEmailState,
@@ -152,7 +166,8 @@ export async function emailQuickReport(
       );
     });
     if (alreadySent) {
-      return { status: "success", message: `Already sent to ${email}. Check your spam folder if you can't find it.` };
+      await unlockInBrowser(checkId);
+      return { status: "success", message: `Unlocked. We already emailed it to ${email}: check your spam folder if you can't find it.` };
     }
     await db()
       .collection("waitlist")
@@ -172,22 +187,24 @@ export async function emailQuickReport(
       );
   } catch (err) {
     if (err instanceof LimitError) {
-      return { status: "error", message: "This report has already been sent several times. Please try again tomorrow." };
+      // The page content is free: never lock someone out, just don't send more mail.
+      await unlockInBrowser(checkId);
+      return { status: "success", message: "Unlocked. We couldn't email it this time: too many requests today." };
     }
     console.error("report email write failed", err);
     return { status: "error", message: "Something went wrong on our side. Please try again in a minute." };
   }
 
+  await unlockInBrowser(checkId);
   const [sent] = await Promise.all([
     sendQuickReport(email, checkId, check),
     addToBrevoWaitlist(email, "alerts"),
     track({ reportEmails: 1 }),
   ]);
-  if (!sent) {
-    return { status: "error", message: "We couldn't send the email right now. Please try again in a minute." };
-  }
   return {
     status: "success",
-    message: `Sent to ${email}. We'll also warn you when Google rolls out a spam update.`,
+    message: sent
+      ? `Unlocked and sent to ${email}. We'll also warn you when Google rolls out a spam update.`
+      : "Unlocked. We couldn't send the email right now, but everything is below.",
   };
 }

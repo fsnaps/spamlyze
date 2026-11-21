@@ -2,6 +2,7 @@ import "server-only";
 import { sendEmail } from "@/lib/brevo";
 import { site } from "@/lib/site";
 import { SIGNAL_LABELS } from "./labels";
+import { unlockToken } from "./unlock";
 import type { StoredCheck } from "./run";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -17,8 +18,8 @@ const muted = "color:#57534e";
 /** The full Quick Check, laid out for email clients (tables and inline styles only). */
 export function quickReportHtml(id: string, check: StoredCheck): string {
   const a = check.analysis;
-  const link = `${site.url}/report/${id}`;
-  const deepLink = `${link}#deep-report`;
+  const link = `${site.url}/report/${id}?u=${unlockToken(id)}`;
+  const deepLink = `${site.url}/report/${id}#deep-report`;
   const d = escape(check.domain);
   const level = (lvl: string) =>
     `<span style="font-size:12px;font-weight:600;text-transform:capitalize;color:${LEVEL_COLORS[lvl] ?? "#57534e"}">${escape(lvl)}</span>`;
@@ -67,10 +68,10 @@ ${a.signals
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e7e5e4;border-radius:16px">
 <tr><td style="padding:32px">
 <p style="margin:0 0 24px;font-weight:600;font-size:16px"><span style="display:inline-block;background:#dc2626;color:#fff;border-radius:6px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:8px">S</span>Spamlyze</p>
-<h1 style="margin:0 0 16px;font-size:22px">Your Quick Check for ${d}</h1>
+<h1 style="margin:0 0 16px;font-size:22px">Your detailed Quick Check for ${d}</h1>
 ${body}
-<p style="margin:28px 0 8px"><a href="${link}" style="background:#dc2626;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:10px;display:inline-block">Open the full report</a></p>
-<p style="margin:16px 0 0;font-size:13px;line-height:1.5;${muted}">You asked for this report on spamlyze.com. We'll also email you when Google rolls out a spam update, so you can check ${d} again. Every alert has a one-click unsubscribe link.</p>
+<p style="margin:28px 0 8px"><a href="${link}" style="background:#dc2626;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:10px;display:inline-block">Open it on Spamlyze</a></p>
+<p style="margin:16px 0 0;font-size:13px;line-height:1.5;${muted}">You asked for this detailed Quick Check on spamlyze.com. We'll also email you when Google rolls out a spam update, so you can check ${d} again. Every alert has a one-click unsubscribe link.</p>
 </td></tr></table>
 <p style="font-size:12px;${muted};margin-top:16px">Spamlyze · ${escape(site.contactEmail)} · An estimate from a small sample of public pages, not a guarantee. Not affiliated with Google.</p>
 </td></tr></table></body></html>`;
@@ -78,7 +79,7 @@ ${body}
 
 export function sendQuickReport(to: string, id: string, check: StoredCheck) {
   const subject = check.analysis
-    ? `Your spam risk report for ${check.domain}: ${check.analysis.riskScore}/100`
-    : `Your spam risk report for ${check.domain}`;
+    ? `Your detailed Quick Check for ${check.domain}: ${check.analysis.riskScore}/100`
+    : `Your Quick Check for ${check.domain}`;
   return sendEmail(to, subject, quickReportHtml(id, check));
 }

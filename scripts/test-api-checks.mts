@@ -74,11 +74,11 @@ const { db } = await import("../src/lib/firebase-admin");
 const acct = await createApiAccount({ email: "c@example.com", name: "C" });
 const { key } = await createApiKey(acct, "checks");
 const bal = async () => (await accounts().doc(acct).get()).get("balanceCents") as number;
-const post = (body: unknown, k = key) =>
+const post = (body: unknown, k = key, idem?: string) =>
   createCheck(
     new Request("https://spamlyze.com/api/v1/checks", {
       method: "POST",
-      headers: { authorization: `Bearer ${k}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${k}`, "content-type": "application/json", ...(idem ? { "idempotency-key": idem } : {}) },
       body: typeof body === "string" ? body : JSON.stringify(body),
     }),
   );
@@ -131,11 +131,21 @@ assert.equal(second.id, first.id);
 assert.equal(second.balance.cents, 70);
 assert.equal(claudeCalls, 1);
 
+// Idempotency-Key: the retry replays the first answer, charged once.
+r = await post({ url: "garden.test" }, key, "job-1");
+const third = await json(r);
+assert.equal(third.balance.cents, 55);
+r = await post({ url: "garden.test" }, key, "job-1");
+assert.equal(r.headers.get("idempotent-replayed"), "true");
+assert.equal((await json(r)).id, third.id);
+assert.equal(await bal(), 55, "not charged twice");
+await addCredits(acct, 30, "manual", "t-idem");
+
 // GET: free, only for this account's checks.
 r = await read(first.id);
 assert.equal(r.status, 200);
 assert.equal((await json(r)).riskScore, 22);
-assert.equal(await bal(), 70);
+assert.equal(await bal(), 85);
 const other = await createApiAccount({ email: "d@example.com", name: "D" });
 const { key: otherKey } = await createApiKey(other, "other");
 r = await read(first.id, otherKey);

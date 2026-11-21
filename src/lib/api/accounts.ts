@@ -15,6 +15,10 @@ export type ApiAccount = {
   /** Prepaid balance in US cents. Only changed by the credits ledger. */
   balanceCents: number;
   dailySpendCapCents: number;
+  /** Where report.done / report.failed events are POSTed (set with PUT /v1/webhook). */
+  webhookUrl?: string;
+  /** Signs webhook payloads (HMAC-SHA256). Shown to the account, so it is stored as is. */
+  webhookSecret?: string;
 };
 
 export const accounts = () => db().collection("apiAccounts");

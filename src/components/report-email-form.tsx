@@ -57,7 +57,7 @@ export function ReportEmailForm({
         {flagged > 0 ? `, and ${flagged} of 5 spam signals need attention` : ""}. Enter your email to see them all
         here and get a copy in your inbox.
       </p>
-      <ul className="mt-3 grid gap-1.5 text-sm sm:grid-cols-3">
+      <ul className="mt-3 grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-3">
         {["All 3 issues with their fixes", "The rating of each spam signal", "An alert at the next Google spam update"].map(
           (t) => (
             <li key={t} className="flex gap-2">

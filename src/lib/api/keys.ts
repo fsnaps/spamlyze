@@ -33,7 +33,7 @@ export type ApiKeyDoc = {
 export const ipField = (ip: string) => `ip_${ip.replace(/[^0-9A-Za-z]/g, "_").slice(0, 64)}`;
 export const ipFromField = (f: string) => f.replace(/^ip_/, "").replace(/_/g, f.includes("_") && f.split("_").length > 5 ? ":" : ".");
 
-const keys = () => db().collection("apiKeys");
+export const keys = () => db().collection("apiKeys");
 
 function pepper(): string {
   const p = process.env.API_KEY_PEPPER;

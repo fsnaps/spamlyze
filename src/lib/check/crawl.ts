@@ -24,6 +24,12 @@ export type CrawlResult = {
   homepage: PageData;
   pages: PageData[];
   sitemapUrlCount: number | null;
+  /**
+   * Distinct pages we know of, homepage included: sitemap URLs plus homepage links. Equals the
+   * pages analyzed when every one we found was crawled. Null when we can't tell (no sitemap and
+   * more links than the sample).
+   */
+  knownPageCount: number | null;
   sitemapSample: string[]; // URL paths only, for pattern analysis
   robotsBlocked: boolean;
 };
@@ -226,6 +232,17 @@ function internalLinksFrom(html: string, pageUrl: string, origin: string): strin
   return [...out];
 }
 
+/** One key per page: no scheme, no "www.", no trailing slash or index file. */
+function pageKey(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/(index\.(html?|php))?$/i, "") || "/";
+    return `${u.hostname.replace(/^www\./, "")}${path}${u.search}`.toLowerCase();
+  } catch {
+    return url;
+  }
+}
+
 /** Spread picks across the list so we see different sections, not just the first posts. */
 export function spreadSample<T>(items: T[], n: number): T[] {
   if (items.length <= n) return items;
@@ -300,9 +317,14 @@ export async function discoverSite(start: URL, limits: SitemapLimits = QUICK_LIM
   const homeLinks = internalLinksFrom(home.body, home.url, origin);
   // Homepage links complete the sitemap: they are the pages the site itself puts forward.
   const candidates = sitemaps.urls.length > 0 ? [...sitemaps.urls, ...homeLinks.filter((u) => !sitemaps.urls.includes(u))] : homeLinks;
-  const pool = candidates
-    .filter((u) => u !== home.url && u !== `${origin}/`)
-    .filter((u) => robotsAllows(rules, new URL(u).pathname));
+  // One entry per page: sitemaps and links often spell the same page differently ("/about/" vs "/about").
+  const keys = new Set([pageKey(home.url), pageKey(`${origin}/`)]);
+  const pool = candidates.filter((u) => {
+    const key = pageKey(u);
+    if (keys.has(key) || !robotsAllows(rules, new URL(u).pathname)) return false;
+    keys.add(key);
+    return true;
+  });
 
   return {
     origin,
@@ -363,17 +385,31 @@ export async function crawl(start: URL): Promise<CrawlResult> {
   const site = await discoverSite(start);
   const { origin, homepage, robotsBlocked } = site;
   if (robotsBlocked) {
-    return { origin, homepage, pages: [], sitemapUrlCount: null, sitemapSample: [], robotsBlocked };
+    return { origin, homepage, pages: [], sitemapUrlCount: null, knownPageCount: null, sitemapSample: [], robotsBlocked };
   }
 
   const picks = spreadSample(site.pool, SAMPLE_SIZE - 1);
   const fetched = await mapLimit(picks, 5, (u) => fetchPageData(u, origin));
+  // Several URLs can land on the same page (redirects, "/" vs "/index.html"): count each page once.
+  const seen = new Set([pageKey(homepage.url)]);
+  const pages = fetched.filter((p): p is PageData => {
+    if (!p || seen.has(pageKey(p.url))) return false;
+    seen.add(pageKey(p.url));
+    return true;
+  });
+  const crawledAll = picks.length === site.pool.length;
+  const knownPageCount = crawledAll
+    ? pages.length + 1
+    : site.sitemapStatus === "found"
+      ? Math.max(site.pool.length + 1, pages.length + 1)
+      : null;
 
   return {
     origin,
     homepage,
-    pages: fetched.filter((p): p is PageData => p !== null),
+    pages,
     sitemapUrlCount: site.sitemapUrlCount,
+    knownPageCount,
     sitemapSample: spreadSample(site.sitemapUrls, 200).map((u) => new URL(u).pathname),
     robotsBlocked,
   };

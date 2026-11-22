@@ -54,6 +54,7 @@ You get a crawl of a small sample of the site's pages plus computed metrics. Jud
 Rules:
 - Most legitimate sites are low risk. Only rate moderate or high when the data shows it, and say what in the data shows it.
 - A sample of 15 pages cannot prove anything: phrase findings as estimates ("the sampled pages suggest...").
+- When metrics.coversWholeSite is true, the crawl holds every page we found (a small or one-page site): say "the pages" or "your site", not "the sampled pages", and don't suggest checking more pages.
 - Use "unknown" for a signal when the sample gives no basis to judge it.
 - Only cite URLs that appear in the input. Never invent numbers or URLs.
 - riskScore is 0-100 (0-29 low, 30-59 moderate, 60-100 high); each signal score uses the same scale.

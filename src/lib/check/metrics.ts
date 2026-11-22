@@ -8,6 +8,10 @@ const RISKY_TERMS = [
 export type Metrics = {
   pagesAnalyzed: number;
   sitemapUrlCount: number | null;
+  /** Distinct pages we know of, homepage included (missing on checks made before 2026-11-22). */
+  knownPageCount?: number | null;
+  /** Every page we found was analyzed: small sites and one-page sites. */
+  coversWholeSite?: boolean;
   avgWordCount: number;
   thinPageShare: number; // share of sampled pages under 300 words
   duplicateTitleShare: number;
@@ -79,6 +83,8 @@ export function computeMetrics(crawl: CrawlResult): Metrics {
   return {
     pagesAnalyzed: n,
     sitemapUrlCount: crawl.sitemapUrlCount,
+    knownPageCount: crawl.knownPageCount,
+    coversWholeSite: crawl.knownPageCount !== null && n >= crawl.knownPageCount,
     avgWordCount: Math.round(pages.reduce((s, p) => s + p.wordCount, 0) / Math.max(n, 1)),
     thinPageShare: round(crawl.pages.filter((p) => p.wordCount < 300).length / Math.max(crawl.pages.length, 1)),
     duplicateTitleShare: round(dupTitles / Math.max(n, 1)),

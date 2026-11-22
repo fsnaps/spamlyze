@@ -8,7 +8,7 @@ import { syncBuiltinESMExports } from "node:module";
 const realLookup = dns.lookup;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (dns as any).lookup = async (host: string) => {
-  if (host === "shop.test" || host === "www.shop.test") return [{ address: "93.184.215.14", family: 4 }];
+  if (["shop.test", "www.shop.test", "small.test", "one.test"].includes(host)) return [{ address: "93.184.215.14", family: 4 }];
   if (host === "evil.test") return [{ address: "169.254.169.254", family: 4 }];
   if (host === "v6.test") return [{ address: "::ffff:10.0.0.1", family: 6 }];
   return realLookup(host, { all: true });
@@ -79,5 +79,48 @@ assert.ok(m.sponsoredOrNofollowShare > 0);
 const { zodOutputFormat } = await import("@anthropic-ai/sdk/helpers/zod");
 const { z } = await import("zod");
 assert.ok(zodOutputFormat(z.object({ a: z.number().int(), b: z.enum(["x", "y"]) })));
+
+// Small site: the sitemap lists the homepage and "/about/", the homepage links "/about" and a
+// page missing from the sitemap. Every page is counted once and the total never trails the sample.
+const html = (body: string) => new Response(body, { headers: { "content-type": "text/html" } });
+const smallPages = ["about", "contact", "services", "fees", "faq", "blog", "team", "terms", "privacy", "guide", "news"];
+Object.assign(routes, {
+  "https://small.test/": () =>
+    html(page("Small home", 400, '<a href="/about">a</a><a href="/about/">a</a><a href="/index.html">h</a><a href="/extra">e</a>')),
+  "https://small.test/robots.txt": () => new Response("User-agent: *\nAllow: /\n"),
+  "https://small.test/sitemap.xml": () =>
+    new Response(
+      `<urlset><url><loc>https://small.test/</loc></url>${smallPages.map((p) => `<url><loc>https://www.small.test/${p}/</loc></url>`).join("")}</urlset>`,
+    ),
+  "https://one.test/": () => html(page("One pager", 700, '<a href="#contact">c</a><a href="mailto:x@one.test">m</a>')),
+});
+for (const p of [...smallPages, "extra"]) routes[`https://small.test/${p}/`] = routes[`https://small.test/${p}`] = () => html(page(p, 350));
+routes["https://small.test/index.html"] = () => html(page("Small home", 400));
+
+const { coverage } = await import("../src/lib/check/coverage");
+const small = await crawl(new URL("https://small.test/"));
+const sm = computeMetrics(small);
+assert.equal(small.sitemapUrlCount, 12);
+assert.equal(new Set(small.pages.map((p) => p.url)).size, small.pages.length, "a page was counted twice");
+assert.equal(sm.pagesAnalyzed, 13, "homepage + 11 sitemap pages + /extra");
+assert.equal(sm.knownPageCount, 13);
+assert.equal(sm.coversWholeSite, true);
+assert.deepEqual(coverage(sm.pagesAnalyzed, sm), { total: 13, share: 100, unseen: 0, complete: true });
+
+// One-page site: no sitemap, no other page, so the whole site was checked.
+const one = computeMetrics(await crawl(new URL("https://one.test/")));
+assert.equal(one.pagesAnalyzed, 1);
+assert.deepEqual(coverage(one.pagesAnalyzed, one), { total: 1, share: 100, unseen: 0, complete: true });
+
+// Large site: the sample is partial and the total comes from the sitemap.
+const big = coverage(m.pagesAnalyzed, m);
+assert.equal(big.complete, false);
+assert.equal(big.total, 41, "41 sitemap URLs (one disallowed by robots) + homepage link + homepage");
+
+// Checks stored before knownPageCount: "13 of 12" becomes a whole-site check, never total < sampled.
+assert.deepEqual(coverage(13, { sitemapUrlCount: 11 }), { total: 13, share: 100, unseen: 0, complete: true });
+assert.equal(coverage(15, { sitemapUrlCount: 300 }).unseen, 286);
+assert.equal(coverage(5, { sitemapUrlCount: 0 }).total, null, "an unreadable sitemap says nothing about size");
+assert.equal(coverage(5, { sitemapUrlCount: null }).total, null);
 
 console.log("all quick-check tests passed", JSON.stringify({ pages: result.pages.length, metrics: m }, null, 0).slice(0, 400));

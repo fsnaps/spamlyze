@@ -454,6 +454,7 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
       origin: r.origin!,
       homepage,
       pages: rest,
+      knownPageCount: null,
       sitemapUrlCount: r.sitemapUrlCount ?? null,
       sitemapSample: r.sitemapSample ?? [],
       robotsBlocked: false,

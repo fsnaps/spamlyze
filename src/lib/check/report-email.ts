@@ -3,7 +3,7 @@ import { sendEmail, sendEmailDetailed } from "@/lib/brevo";
 import { deepReportEnabled } from "@/lib/deep/config";
 import { deepPricing, formatUsd, promoLastDay, tierFor, tierMaxPages } from "@/lib/pricing";
 import { site } from "@/lib/site";
-import { coverage } from "./coverage";
+import { coverage, pagesWord } from "./coverage";
 import { SIGNAL_LABELS } from "./labels";
 import { unlockToken } from "./unlock";
 import type { StoredCheck } from "./run";
@@ -36,14 +36,29 @@ ${body}
 </td></tr></table></body></html>`;
 }
 
-/** Amber box: how little of the site the Quick Check saw. */
+/** "all 13 pages of example.com" or "the single page of example.com", once every page was checked. */
+function wholeSite(check: StoredCheck): string | null {
+  const c = coverage(check.pagesAnalyzed, check.metrics);
+  if (!c.complete || c.total === null) return null;
+  const d = escape(check.domain);
+  return c.total === 1 ? `the single page of ${d}` : `all ${n(c.total)} pages of ${d}`;
+}
+
+/** Amber box: how little of the site the Quick Check saw. Green when it saw every page. */
 function coverageBox(check: StoredCheck) {
-  const c = coverage(check.pagesAnalyzed, check.metrics.sitemapUrlCount);
+  const c = coverage(check.pagesAnalyzed, check.metrics);
+  if (c.complete && c.total !== null) {
+    const head = c.total === 1 ? "Your site has a single page, and we checked it" : `All ${n(c.total)} pages checked (100% of your site)`;
+    return `<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:14px 16px;margin:0 0 20px">
+<p style="margin:0 0 4px;font-weight:600;color:#065f46">&#10003; ${head}</p>
+<p style="margin:0;font-size:14px;line-height:1.5;color:#064e3b">Nothing was extrapolated. The score doesn't use your Search Console traffic yet.</p>
+</div>`;
+  }
   const head = c.total
     ? `Based on ${check.pagesAnalyzed} of ${n(c.total)} pages (${c.share}% of your site)`
-    : `Based on ${check.pagesAnalyzed} pages only`;
+    : `Based on ${check.pagesAnalyzed} ${pagesWord(check.pagesAnalyzed)} only`;
   const rest = c.total
-    ? `The other ${n(c.unseen)} pages weren't checked, including any that are losing traffic.`
+    ? `The other ${n(c.unseen)} ${c.unseen === 1 ? "page wasn't" : "pages weren't"} checked, including any that are losing traffic.`
     : "We found no sitemap, so we can't tell how much of your site that is. Pages losing traffic weren't checked.";
   return `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:14px 16px;margin:0 0 20px">
 <p style="margin:0 0 4px;font-weight:600;color:#92400e">&#9888;&#65039; ${head}</p>
@@ -54,13 +69,14 @@ function coverageBox(check: StoredCheck) {
 /** Deep Report offer, priced for this site's size at the given time (promo and deadline included). */
 function deepOffer(id: string, check: StoredCheck, at: number, heading: string) {
   const link = `${site.url}/report/${id}#deep-report`;
-  const c = coverage(check.pagesAnalyzed, check.metrics.sitemapUrlCount);
+  const c = coverage(check.pagesAnalyzed, check.metrics);
   const tier = tierFor(check.metrics.sitemapUrlCount);
-  const pages = c.total && c.total <= tierMaxPages(tier) ? `all ${n(c.total)} pages` : `up to ${tierMaxPages(tier)} pages`;
+  const pages =
+    c.total === 1 ? "the single page" : c.total && c.total <= tierMaxPages(tier) ? `all ${n(c.total)} pages` : `up to ${tierMaxPages(tier)} pages`;
   if (!deepReportEnabled()) {
     return `<div style="background:#fef2f2;border-radius:12px;padding:20px;margin:24px 0 0">
 <p style="margin:0 0 6px;font-weight:600">${heading}</p>
-<p style="margin:0 0 12px;line-height:1.5;font-size:14px;${muted}">The Deep Report reviews ${pages} of ${escape(check.domain)} one by one and builds your Search Console data into a prioritized action plan.</p>
+<p style="margin:0 0 12px;line-height:1.5;font-size:14px;${muted}">The Deep Report reviews ${pages} of ${escape(check.domain)} ${c.total === 1 ? "in depth" : "one by one"} and builds your Search Console data into a prioritized action plan.</p>
 <a href="${link}" style="color:#dc2626;font-weight:600">Join the Deep Report waitlist →</a>
 </div>`;
   }
@@ -72,7 +88,7 @@ function deepOffer(id: string, check: StoredCheck, at: number, heading: string) 
     : `<span style="font-size:22px;font-weight:700">${formatUsd(p.cents)}</span>`;
   return `<div style="background:#fef2f2;border-radius:12px;padding:20px;margin:24px 0 0">
 <p style="margin:0 0 6px;font-weight:600;font-size:17px">${heading}</p>
-<p style="margin:0 0 14px;line-height:1.5;font-size:14px;${muted}">The Deep Report reviews ${pages} of ${escape(check.domain)} one by one, finds the pages losing clicks in your Search Console and gives you a prioritized action plan with the exact pages to fix. One-time payment, no subscription.</p>
+<p style="margin:0 0 14px;line-height:1.5;font-size:14px;${muted}">The Deep Report reviews ${pages} of ${escape(check.domain)} ${c.total === 1 ? "in depth" : "one by one"}, finds the pages losing clicks in your Search Console and gives you a prioritized action plan with the exact pages to fix. One-time payment, no subscription.</p>
 <p style="margin:0 0 14px;line-height:1.4">${price}</p>
 <a href="${link}" style="background:#dc2626;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:10px;display:inline-block">Get the Deep Report</a>
 </div>`;
@@ -117,7 +133,14 @@ ${a.signals
 </div>`,
   )
   .join("")}
-${deepOffer(id, check, now, `These ${a.topIssues.length} fixes come from ${check.pagesAnalyzed} pages. What about the rest?`)}
+${deepOffer(
+  id,
+  check,
+  now,
+  wholeSite(check)
+    ? "Now add your traffic data"
+    : `These ${a.topIssues.length} fixes come from ${check.pagesAnalyzed} ${pagesWord(check.pagesAnalyzed)}. What about the rest?`,
+)}
 <p style="margin:20px 0 0;font-size:14px"><a href="${link}" style="color:#dc2626">Open this Quick Check on Spamlyze</a></p>`;
 
   return layout(
@@ -131,14 +154,17 @@ ${deepOffer(id, check, now, `These ${a.topIssues.length} fixes come from ${check
 export function followUpHtml(id: string, check: StoredCheck, at: number): string {
   const a = check.analysis!;
   const d = escape(check.domain);
-  const c = coverage(check.pagesAnalyzed, check.metrics.sitemapUrlCount);
-  const rest = c.total
-    ? `Your Quick Check looked at ${check.pagesAnalyzed} of the ${n(c.total)} pages of ${d}. The other ${n(c.unseen)} have never been checked: if the same patterns are there, Google can see them too.`
+  const c = coverage(check.pagesAnalyzed, check.metrics);
+  const whole = wholeSite(check);
+  const rest = whole
+    ? `Your Quick Check looked at ${whole}, but not at your traffic. Your Search Console shows which pages lose clicks after a spam update: that's where to start.`
+    : c.total
+    ? `Your Quick Check looked at ${check.pagesAnalyzed} of the ${n(c.total)} pages of ${d}. The other ${n(c.unseen)} ${c.unseen === 1 ? "has" : "have"} never been checked: if the same patterns are there, Google can see them too.`
     : `Your Quick Check looked at ${check.pagesAnalyzed} pages of ${d}. The rest of the site has never been checked: if the same patterns are there, Google can see them too.`;
   const body = `<p style="margin:0 0 12px;line-height:1.6">A few days ago, your Quick Check flagged these on ${d}:</p>
 <ol style="margin:0 0 16px;padding-left:20px;line-height:1.6">${a.topIssues.map((t) => `<li>${escape(t.title)}</li>`).join("")}</ol>
 <p style="margin:0 0 12px;line-height:1.6">${rest}</p>
-${deepOffer(id, check, at, "See what's left across the whole site")}`;
+${deepOffer(id, check, at, whole ? "See which pages are losing traffic" : "See what's left across the whole site")}`;
   return layout(
     `Did you fix the ${a.topIssues.length} issues on ${d}?`,
     body,

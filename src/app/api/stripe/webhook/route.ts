@@ -1,8 +1,10 @@
 import type Stripe from "stripe";
 import { confirmPayment } from "@/lib/deep/job";
+import { fulfillCreditPurchase } from "@/lib/api/purchase";
 import { stripe } from "@/lib/stripe";
 
-// Backup for the success redirect: starts the report even if the buyer closes the tab.
+// Backup for the success redirect: starts the report, or credits an API account, even if the
+// buyer closes the tab.
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) return new Response("Webhook not configured", { status: 503 });
@@ -14,8 +16,11 @@ export async function POST(request: Request) {
   }
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object;
-    const id = session.metadata?.deepId;
-    if (id) await confirmPayment(id, session.id);
+    if (session.metadata?.kind === "api_credits") {
+      await fulfillCreditPurchase(session);
+    } else if (session.metadata?.deepId) {
+      await confirmPayment(session.metadata.deepId, session.id);
+    }
   }
   return new Response("ok");
 }

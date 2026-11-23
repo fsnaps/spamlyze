@@ -1,7 +1,46 @@
 "use client";
 
+import { useState } from "react";
 import { useActionState } from "react";
 import { createKeyAction, setWebhookAction, type NewKeyState, type WebhookState } from "./actions";
+
+/** Starts a Stripe Checkout for a credit pack and sends the buyer to Stripe. */
+export function BuyCreditsForm({ accountId, packId }: { accountId: string; packId: string }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function buy() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/account/credits/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accountId, packId }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (data.url) window.location.href = data.url;
+      else {
+        setError(data.error ?? "Something went wrong.");
+        setPending(false);
+      }
+    } catch {
+      setError("Network error. Please try again.");
+      setPending(false);
+    }
+  }
+  return (
+    <div className="mt-3">
+      <button
+        onClick={buy}
+        disabled={pending}
+        className="w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {pending ? "Redirecting…" : "Buy"}
+      </button>
+      {error && <p className="mt-2 text-xs text-red-700 dark:text-red-300">{error}</p>}
+    </div>
+  );
+}
 
 /** Creates a key and shows it once: only its hash is stored. */
 export function NewKeyForm({ accountId }: { accountId: string }) {

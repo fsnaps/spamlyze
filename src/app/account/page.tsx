@@ -9,9 +9,11 @@ import type { ApiAccount } from "@/lib/api/accounts";
 import { API_PRICES } from "@/lib/api/config";
 import { listLedger, spentToday } from "@/lib/api/credits";
 import { listApiKeys } from "@/lib/api/keys";
+import { CREDIT_PACKS, packCreditCents } from "@/lib/api/packs";
+import { fulfillFromRedirect } from "@/lib/api/purchase";
 import { site } from "@/lib/site";
 import { revokeKeyAction } from "./actions";
-import { NewKeyForm, WebhookForm } from "./forms";
+import { BuyCreditsForm, NewKeyForm, WebhookForm } from "./forms";
 
 export const metadata: Metadata = { title: "API account", robots: { index: false, follow: false } };
 
@@ -55,6 +57,18 @@ async function Account({ searchParams }: { searchParams: PageProps<"/account">["
   }
 
   const list = await myAccounts(email);
+  // Backup for the Stripe webhook: if the buyer just came back from Checkout, credit the account now.
+  const purchase = (await searchParams).purchase;
+  let bought: number | null = null;
+  if (typeof purchase === "string" && purchase.startsWith("cs_")) {
+    for (const a of list) {
+      bought = await fulfillFromRedirect(a.id, purchase);
+      if (bought !== null) {
+        a.balanceCents = (await myAccounts(email)).find((x) => x.id === a.id)?.balanceCents ?? a.balanceCents;
+        break;
+      }
+    }
+  }
   return (
     <>
       <div className="flex items-baseline justify-between gap-4">
@@ -66,6 +80,12 @@ async function Account({ searchParams }: { searchParams: PageProps<"/account">["
           </a>
         </span>
       </div>
+      {bought !== null && (
+        <p className="mt-4 rounded-2xl border border-emerald-500/60 bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-300">
+          Payment received. {usd(bought)} of credits were added to your account.
+        </p>
+      )}
+      {purchase === "canceled" && <p className="mt-4 text-sm text-muted">Payment canceled. Your balance is unchanged.</p>}
       {list.length === 0 ? (
         <p className="mt-8 rounded-2xl border border-line bg-surface p-5">
           There is no API account for {email} yet. The Spamlyze API opens on December 1, 2026.{" "}
@@ -101,7 +121,7 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
         {a.status !== "active" && <span className="ml-2 text-sm text-red-700 dark:text-red-300">suspended</span>}
       </h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <Tile label="Balance" value={usd(a.balanceCents)} hint="Prepaid. Buying credits online comes next." warn={a.balanceCents < API_PRICES.deepReport} />
+        <Tile label="Balance" value={usd(a.balanceCents)} hint="Prepaid credits." warn={a.balanceCents < API_PRICES.deepReport} />
         <Tile
           label="Spent today (UTC)"
           value={usd(spent)}
@@ -110,6 +130,25 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
         />
         <Tile label="Prices" value={`${usd(API_PRICES.quickCheck)} · ${usd(API_PRICES.deepReport)}`} hint="Quick Check · Deep Report" />
       </div>
+
+      {a.status === "active" && (
+        <>
+          <h3 className="mt-8 font-semibold">Buy credits</h3>
+          <p className="mt-1 text-xs text-muted">Prepaid, no subscription. Larger packs include bonus credits. Paid securely through Stripe.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {CREDIT_PACKS.map((p) => (
+              <div key={p.id} className="rounded-2xl border border-line bg-surface p-4">
+                <p className="font-medium">{p.label}</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{usd(p.priceCents)}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {p.bonusCents ? `${usd(packCreditCents(p))} of credits (+${usd(p.bonusCents)} bonus)` : `${usd(p.priceCents)} of credits`}
+                </p>
+                <BuyCreditsForm accountId={a.id} packId={p.id} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <h3 className="mt-8 font-semibold">API keys</h3>
       <p className="mt-1 text-xs text-muted">

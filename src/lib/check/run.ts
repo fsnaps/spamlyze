@@ -9,6 +9,7 @@ import { cachedCheck, takeQuota } from "./guard";
 import { notifyAdmin } from "@/lib/notify";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
+import { recordRiskScore } from "./benchmark";
 
 export type StoredCheck = {
   domain: string;
@@ -67,6 +68,7 @@ export async function executeQuickCheck(url: URL, api?: { accountId: string }): 
 
   const opus = ai?.model.includes("opus");
   await Promise.all([
+    ai ? recordRiskScore(domain, ai.analysis.riskScore) : null,
     track({
       [api ? "apiQuickChecks" : "quickChecks"]: 1,
       [opus ? "opusInputTokens" : "haikuInputTokens"]: ai?.usage.input ?? 0,

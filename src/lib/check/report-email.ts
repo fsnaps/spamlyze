@@ -7,6 +7,7 @@ import { coverage, pagesWord } from "./coverage";
 import { SIGNAL_LABELS } from "./labels";
 import { unlockToken } from "./unlock";
 import type { StoredCheck } from "./run";
+import { benchmarkFor, rankHeadline, type Benchmark } from "./benchmark";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -95,7 +96,22 @@ function deepOffer(id: string, check: StoredCheck, at: number, heading: string) 
 }
 
 /** The detailed Quick Check, laid out for email clients (tables and inline styles only). */
-export function quickReportHtml(id: string, check: StoredCheck, now = Date.now()): string {
+/** Where the site sits among all analysed sites: one line and a safest → riskiest bar. */
+function rankBox(b: Benchmark | null, score: number): string {
+  if (!b) return "";
+  const h = rankHeadline(b);
+  const color = b.position >= 66 ? "#dc2626" : b.position >= 33 ? "#b45309" : "#047857";
+  const left = Math.round(b.position);
+  return `<p style="margin:0 0 8px;font-size:15px"><strong style="color:${color}">${h.lead} ${h.percent}%</strong> <span style="${muted}">of the sites analysed on Spamlyze</span></p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px;border-collapse:collapse"><tr>
+<td width="${left}%" style="height:8px;background:#10b981;background-image:linear-gradient(90deg,#10b981,#fbbf24${left > 60 ? ",#ef4444" : ""});border-radius:4px 0 0 4px;font-size:0;line-height:0">&nbsp;</td>
+<td width="6" style="height:16px;background:#1c1917;border-radius:3px;font-size:0;line-height:0">&nbsp;</td>
+<td style="height:8px;background:#e7e5e4;border-radius:0 4px 4px 0;font-size:0;line-height:0">&nbsp;</td>
+</tr></table>
+<p style="margin:0 0 16px;font-size:12px;${muted}">Safest &larr; your site (${score}/100) &rarr; Riskiest</p>`;
+}
+
+export function quickReportHtml(id: string, check: StoredCheck, now = Date.now(), benchmark: Benchmark | null = null): string {
   const a = check.analysis;
   const link = `${site.url}/report/${id}?u=${unlockToken(id)}`;
   const d = escape(check.domain);
@@ -112,7 +128,7 @@ export function quickReportHtml(id: string, check: StoredCheck, now = Date.now()
   const body = !a
     ? `<p style="margin:0 0 12px;line-height:1.6;${muted}">Your robots.txt blocks crawlers from your homepage, so we couldn't analyze ${d}. Allow SpamlyzeBot and run the check again.</p>`
     : `<p style="margin:0 0 14px;font-size:15px">Estimated spam risk: <strong style="font-size:20px">${a.riskScore}/100</strong> ${level(a.riskLevel)}</p>
-${coverageBox(check)}
+${rankBox(benchmark, a.riskScore)}${coverageBox(check)}
 <p style="margin:0 0 24px;line-height:1.6">${escape(a.summary)}</p>
 <h2 style="margin:0 0 12px;font-size:18px">Top 3 things to fix</h2>
 ${a.topIssues
@@ -172,11 +188,12 @@ ${deepOffer(id, check, at, whole ? "See which pages are losing traffic" : "See w
   );
 }
 
-export function sendQuickReport(to: string, id: string, check: StoredCheck) {
+export async function sendQuickReport(to: string, id: string, check: StoredCheck) {
+  const benchmark = check.analysis ? await benchmarkFor(check.analysis.riskScore) : null;
   const subject = check.analysis
     ? `Your detailed Quick Check for ${check.domain}: ${check.analysis.riskScore}/100`
     : `Your Quick Check for ${check.domain}`;
-  return sendEmail(to, subject, quickReportHtml(id, check));
+  return sendEmail(to, subject, quickReportHtml(id, check, Date.now(), benchmark));
 }
 
 /** Schedules the follow-up through Brevo and returns its message id, to cancel it if they buy. */

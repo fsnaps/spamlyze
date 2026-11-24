@@ -13,7 +13,7 @@ import { getQuickImport } from "@/lib/gsc/imports";
 import { SIGNAL_LABELS } from "@/lib/check/labels";
 import { coverage, pagesWord } from "@/lib/check/coverage";
 import { cookies } from "next/headers";
-import { LockedLines, ReportEmailForm, UnlockLink } from "@/components/report-email-form";
+import { LockedBadge, LockedLines, ReportEmailForm } from "@/components/report-email-form";
 import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
 import { benchmarkFor } from "@/lib/check/benchmark";
 import { RiskRank } from "@/components/risk-rank";
@@ -71,17 +71,29 @@ function wholeSite(total: number) {
   return total === 1 ? "your site's single page" : `all ${fmt(total)} pages of your site`;
 }
 
-/** How much of the site the Quick Check saw, and what the Deep Report adds. */
-function CompareReports({
+const CHECK = (
+  <svg aria-hidden viewBox="0 0 16 16" className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="m3.5 8.5 3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+const DOT = <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-stone-400/60" />;
+
+/**
+ * Right under the score: the main action of the page. What this Quick Check saw next to what the
+ * Deep Report adds, and the checkout button itself (or a link to it when the buyer must pick a size).
+ */
+function DeepNextStep({
   sampled,
   c,
   deepPages,
-  cta,
+  action,
+  reassurance,
 }: {
   sampled: number;
   c: Coverage;
   deepPages: number;
-  cta: string;
+  action: React.ReactNode;
+  reassurance: React.ReactNode;
 }) {
   const total = c.total;
   const deepCovers =
@@ -89,35 +101,46 @@ function CompareReports({
       ? "Your single page reviewed in depth"
       : `${total !== null && total <= deepPages ? `All ${fmt(total)} pages` : `Up to ${deepPages} pages`} reviewed one by one`;
   return (
-    <section className="mt-4 rounded-2xl border border-line bg-surface p-5 sm:p-6">
-      <p className="font-semibold">Quick Check or Deep Report?</p>
-      <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-xl border border-line p-4">
-          <p className="font-semibold">This Quick Check</p>
-          <ul className="mt-2 space-y-1.5 text-muted">
-            <li>
+    <section className="sl-fade-up mt-10 rounded-2xl border border-line bg-surface p-6 shadow-sm [animation-delay:200ms] sm:p-8 print:hidden">
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent">Recommended next step</p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+        {c.complete ? "Find the pages losing traffic" : "Know exactly which pages to fix"}
+      </h2>
+      <p className="mt-2 max-w-2xl leading-relaxed text-muted">
+        {c.complete
+          ? "This Quick Check saw your whole site, but not your traffic. The Deep Report adds your Search Console data and turns it into a prioritized action plan."
+          : `This Quick Check is an estimate from ${sampled} ${pagesWord(sampled)}. The Deep Report checks the rest of your site, uses your Search Console data, and tells you what to fix first.`}
+      </p>
+      <div className="mt-6 grid grid-cols-1 gap-6 border-t border-line pt-6 text-sm sm:grid-cols-2 sm:gap-10">
+        <div>
+          <p className="font-medium text-muted">This Quick Check</p>
+          <ul className="mt-3 space-y-2.5 text-muted">
+            <li className="flex gap-3">
+              {DOT}
               {c.complete && total !== null
                 ? `${wholeSite(total).replace(/^./, (x) => x.toUpperCase())} checked`
                 : `${sampled} ${pagesWord(sampled)} sampled, the rest extrapolated`}
             </li>
-            <li>Search Console shown below, not used in the score</li>
+            <li className="flex gap-3">{DOT}Search Console not used in the score</li>
+            <li className="flex gap-3">{DOT}Issues described, pages not listed</li>
           </ul>
         </div>
-        <div className="rounded-xl border border-accent/40 bg-accent/5 p-4">
-          <p className="font-semibold text-accent">Deep Report</p>
-          <ul className="mt-2 space-y-1.5">
-            <li>{deepCovers}</li>
-            <li>Search Console built into the score and the action plan</li>
-            {c.complete && <li>Pages losing clicks since the spam update, ranked</li>}
+        <div>
+          <p className="font-semibold">Deep Report</p>
+          <ul className="mt-3 space-y-2.5">
+            <li className="flex gap-3">{CHECK}{deepCovers}</li>
+            <li className="flex gap-3">{CHECK}Search Console built into the score</li>
+            <li className="flex gap-3">
+              {CHECK}
+              {c.complete ? "Pages losing clicks since the spam update, ranked" : "The exact pages to fix, in order"}
+            </li>
           </ul>
         </div>
       </div>
-      <a
-        href="#deep-report"
-        className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-strong print:hidden"
-      >
-        {cta}
-      </a>
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
+        <div className="w-full sm:w-72 sm:shrink-0">{action}</div>
+        <div className="text-xs leading-relaxed text-muted sm:pt-3.5">{reassurance}</div>
+      </div>
     </section>
   );
 }
@@ -141,7 +164,7 @@ function SiteWidePages({ total }: { total: number | null }) {
         </span>
       </span>
       <span className="shrink-0 font-semibold text-accent">
-        <span aria-hidden>🔒</span> Deep Report
+        Deep Report →
       </span>
     </a>
   );
@@ -268,7 +291,7 @@ async function Report({
         </p>
       ) : (
         <>
-          <section className="sl-fade-up mt-8 flex flex-col gap-6 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center">
+          <section className="sl-fade-up mt-8 flex flex-col gap-8 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center sm:p-8">
             <div className="shrink-0 text-center sm:w-40">
               <ScoreGauge score={a.riskScore} level={a.riskLevel} />
               <p className="-mt-3 text-sm text-muted">estimated risk</p>
@@ -286,91 +309,116 @@ async function Report({
                 </div>
               )}
               <p className="leading-relaxed">{a.summary}</p>
-              <div className="mt-4">
+              <div className="mt-5">
                 <CoverageNote sampled={sampled} c={c} />
               </div>
             </div>
           </section>
-          <ReportEmailForm checkId={id} unlocked={unlocked} issues={a.topIssues.length} flagged={flagged} />
-          <CompareReports
+          <DeepNextStep
             sampled={sampled}
             c={c}
             deepPages={tierMaxPages(tier)}
-            cta={deepReportEnabled() ? `See the Deep Report · ${deepPrice}` : "Join the Deep Report waitlist"}
+            action={
+              deepReportEnabled() && !largePricing ? (
+                <DeepCheckout url={check.url} price={deepPrice} />
+              ) : (
+                <a
+                  href="#deep-report"
+                  className="flex h-12 w-full items-center justify-center rounded-xl bg-accent px-6 font-semibold text-white transition hover:bg-accent-strong"
+                >
+                  {deepReportEnabled() ? `Get the Deep Report · ${deepPrice}` : "Join the Deep Report waitlist"}
+                </a>
+              )
+            }
+            reassurance={
+              deepReportEnabled() ? (
+                <>
+                  {pricing.promo && (
+                    <span className="mr-2 inline-block rounded-full bg-accent/10 px-2 py-0.5 font-semibold text-accent">
+                      {pricing.promo.label} −{pricing.promo.percentOff}%
+                    </span>
+                  )}
+                  One-time payment, no subscription. Read-only access to Search Console. Automatic refund if the
+                  report can&apos;t be produced.
+                </>
+              ) : (
+                "We'll email you once, the day it opens."
+              )
+            }
           />
 
-          <section className="mt-12">
+          <section className="mt-16 sm:mt-20">
             <h2 className="text-2xl font-semibold tracking-tight">Top 3 things to fix</h2>
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-2 text-sm text-muted">
               {whole ? `Based on ${whole}.` : `Based on the ${sampled} sampled ${pagesWord(sampled)} only.`}
             </p>
-            <ol className="mt-6 space-y-4">
-              {a.topIssues.map((t, i) => (
-                <li
-                  key={t.title}
-                  className="sl-fade-up rounded-2xl border border-line bg-surface p-6"
-                  style={{ animationDelay: `${500 + i * 120}ms` }}
-                >
-                  <h3 className="font-semibold">
-                    {i + 1}. {t.title}
-                  </h3>
-                  {unlocked || i === 0 ? (
-                    <>
-                      <p className="mt-2 text-muted">{t.why}</p>
-                      <p className="mt-2">
-                        <span className="font-semibold">Fix: </span>
-                        {t.fix}
-                      </p>
-                      <UrlList urls={t.exampleUrls} />
-                    </>
-                  ) : (
-                    <>
-                      <LockedLines />
-                      <UnlockLink />
-                    </>
-                  )}
-                </li>
-              ))}
-            </ol>
-            <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-dashed border-line p-5 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-muted">
-                {whole
-                  ? `These come from ${whole}, but not from your traffic. The Deep Report adds your Search Console data: it finds the pages losing clicks and turns these fixes into a prioritized plan.`
-                  : `${
-                      c.unseen > 0
-                        ? `These come from ${sampled} ${pagesWord(sampled)}. The other ${fmt(c.unseen)} ${c.unseen === 1 ? "page wasn't" : "pages weren't"} checked, including any that are losing traffic.`
-                        : `These come from a sample of ${sampled} ${pagesWord(sampled)}.`
-                    } The Deep Report reviews every page it covers and lists the exact ones to fix, in order.`}
-              </p>
-              <a href="#deep-report" className="shrink-0 font-semibold text-accent underline underline-offset-4 print:hidden">
+            <div className="mt-6 rounded-2xl border border-line bg-surface p-6 sm:p-8">
+              <ol className="divide-y divide-line">
+                {a.topIssues.map((t, i) => (
+                  <li
+                    key={t.title}
+                    className="sl-fade-up flex gap-4 py-6 first:pt-0 last:pb-0"
+                    style={{ animationDelay: `${500 + i * 120}ms` }}
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-line text-sm font-semibold tabular-nums text-muted">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <h3 className="font-semibold leading-snug">{t.title}</h3>
+                      {unlocked || i === 0 ? (
+                        <>
+                          <p className="mt-2 leading-relaxed text-muted">{t.why}</p>
+                          <p className="mt-3 leading-relaxed">
+                            <span className="font-semibold">Fix: </span>
+                            {t.fix}
+                          </p>
+                          <UrlList urls={t.exampleUrls} />
+                        </>
+                      ) : (
+                        <LockedLines />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <ReportEmailForm checkId={id} unlocked={unlocked} issues={a.topIssues.length} flagged={flagged} />
+            </div>
+            <p className="mt-5 text-sm leading-relaxed text-muted">
+              {whole
+                ? `These come from ${whole}, but not from your traffic. The Deep Report adds your Search Console data and turns these fixes into a prioritized plan.`
+                : `${
+                    c.unseen > 0
+                      ? `These come from ${sampled} ${pagesWord(sampled)}. The other ${fmt(c.unseen)} ${c.unseen === 1 ? "page wasn't" : "pages weren't"} checked.`
+                      : `These come from a sample of ${sampled} ${pagesWord(sampled)}.`
+                  } The Deep Report lists the exact pages to fix, in order.`}{" "}
+              <a href="#deep-report" className="whitespace-nowrap font-semibold text-foreground hover:text-accent print:hidden">
                 {whole ? "Add your traffic data →" : "Check every page →"}
               </a>
-            </div>
+            </p>
           </section>
 
-          <section className="mt-12">
+          <section className="mt-16 sm:mt-20">
             <h2 className="text-2xl font-semibold tracking-tight">Spam signals</h2>
-            {!unlocked && (
-              <p className="mt-1 text-sm text-muted">
-                We rated your site on 5 spam signals{flagged > 0 ? `: ${flagged} need attention` : ""}. <a href="#unlock" className="font-semibold text-accent underline underline-offset-4">Unlock the ratings for free</a>
-              </p>
-            )}
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <p className="mt-2 text-sm text-muted">
+              We rated your site on the 5 signals Google&apos;s spam updates target
+              {flagged > 0 ? `: ${flagged} need attention` : ""}.
+              {!unlocked && (
+                <>
+                  {" "}
+                  The ratings come with the{" "}
+                  <a href="#unlock" className="text-foreground underline decoration-line underline-offset-4 hover:decoration-foreground">
+                    free detailed Quick Check
+                  </a>
+                  .
+                </>
+              )}
+            </p>
+            <ul className="mt-6 divide-y divide-line rounded-2xl border border-line bg-surface">
               {a.signals.map((s, i) => (
-                <div
-                  key={s.id}
-                  className="sl-fade-up rounded-2xl border border-line bg-surface p-6"
-                  style={{ animationDelay: `${900 + i * 90}ms` }}
-                >
+                <li key={s.id} className="sl-fade-up px-6 py-5 sm:px-8 sm:py-6" style={{ animationDelay: `${900 + i * 90}ms` }}>
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="font-semibold">{SIGNAL_LABELS[s.id] ?? s.id}</h3>
-                    {unlocked ? (
-                      <LevelBadge level={s.level} />
-                    ) : (
-                      <span className="rounded-full bg-stone-500/10 px-2.5 py-0.5 text-xs font-semibold text-muted">
-                        <span aria-hidden>🔒</span> Locked
-                      </span>
-                    )}
+                    {unlocked ? <LevelBadge level={s.level} /> : <LockedBadge />}
                   </div>
                   {unlocked ? (
                     <>
@@ -381,9 +429,9 @@ async function Report({
                   ) : (
                     <LockedLines lines={1} />
                   )}
-                </div>
+                </li>
               ))}
-              <div className="rounded-2xl border border-dashed border-line p-6">
+              <li className="px-6 py-5 sm:px-8 sm:py-6">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-semibold">Traffic drops around updates</h3>
                   <LevelBadge level="unknown" />
@@ -394,7 +442,7 @@ async function Report({
                   ) : gscEnabled() ? (
                     <>
                       Needs Search Console.{" "}
-                      <a href="#search-console" className="text-accent underline">
+                      <a href="#search-console" className="text-foreground underline decoration-line underline-offset-4 hover:decoration-foreground">
                         Connect it for free
                       </a>
                       .
@@ -403,59 +451,33 @@ async function Report({
                     "Needs Search Console. Coming soon."
                   )}
                 </p>
-              </div>
-            </div>
+              </li>
+            </ul>
           </section>
 
-          <GscSection
-            connectHref={`/api/gsc/connect?check=${id}`}
-            gsc={gsc}
-            result={gscResult}
-            enabled={gscEnabled()}
-            note={
-              gsc ? (
-                <>
-                  <span className="font-semibold text-foreground">Your Search Console data isn&apos;t used in this score.</span>{" "}
-                  It&apos;s shown here for information. The Deep Report crawls the pages that lost clicks and builds them into
-                  the score and the action plan.
-                </>
-              ) : (
-              <>
-                <span className="font-semibold text-foreground">Shown for information only:</span> these figures
-                aren&apos;t part of your Quick Check score. The Deep Report builds them into the score and the action plan.
-              </>
-              )
-            }
-            upsell={
-              <>
-                <p className="mt-2 text-muted">
-                  The Deep Report lists them one by one with their clicks before and after, reviews up to 500 pages
-                  and gives you a prioritized action plan.
-                </p>
-                <a
-                  href="#deep-report"
-                  className="mt-4 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
-                >
-                  {deepCta}
-                </a>
-              </>
-            }
-          />
         </>
       )}
 
-      <section id="deep-report" className="mt-12 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
-        <h2 className="text-xl font-semibold">From an estimate to a diagnosis</h2>
-        <p className="mt-2 text-muted">
+      <section id="deep-report" className="mt-16 scroll-mt-8 rounded-2xl border border-line bg-surface p-6 shadow-sm sm:mt-20 sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-wide text-accent">Deep Report</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight">From an estimate to a diagnosis</h2>
+        <p className="mt-2 max-w-2xl leading-relaxed text-muted">
           {whole
-            ? `This check looked at ${whole}, without your traffic data. The Deep Report reviews ${whole} in depth, builds your Search Console data into the score, finds the pages losing clicks, and gives you a prioritized action plan.`
+            ? `This check looked at ${whole}, without your traffic. The Deep Report reviews ${whole} in depth and gives you a prioritized action plan.`
             : `This check estimated your risk from ${sampled} ${pagesWord(sampled)}. The Deep Report reviews ${
                 c.total !== null && c.total <= tierMaxPages(tier)
                   ? `all ${fmt(c.total)} pages of your site`
                   : `up to ${tierMaxPages(tier)} pages`
-              } one by one, builds your Search Console data into the score, and gives you a prioritized action plan with the exact pages to fix.`}
+              } one by one and gives you a prioritized action plan with the exact pages to fix.`}
         </p>
-        <div className="mt-5 max-w-md">
+        <div className="mt-6 max-w-2xl rounded-xl bg-background p-5">
+          <p className="font-semibold">Built on your Search Console data</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            The Deep Report connects to Search Console (read-only), finds the pages that lost clicks around each Google
+            update, reviews them, and builds that traffic into the score and the action plan. The Quick Check doesn&apos;t.
+          </p>
+        </div>
+        <div className="mt-8 max-w-md">
           {deepReportEnabled() ? (
             <>
               <p className="mb-3 text-sm text-muted">
@@ -477,7 +499,45 @@ async function Report({
         </div>
       </section>
 
-      <p className="mt-8 text-xs text-muted">
+      {a && !check.robotsBlocked && (
+        <GscSection
+          quiet
+          connectHref={`/api/gsc/connect?check=${id}`}
+          gsc={gsc}
+          result={gscResult}
+          enabled={gscEnabled()}
+          note={
+            gsc ? (
+              <>
+                <span className="font-semibold text-foreground">Your Search Console data isn&apos;t used in this score.</span>{" "}
+                It&apos;s shown here for information. The Deep Report crawls the pages that lost clicks and builds them into
+                the score and the action plan.
+              </>
+            ) : (
+            <>
+              Optional. See whether your clicks dropped around Google&apos;s updates. Shown for information only: it
+              doesn&apos;t change this Quick Check score.
+            </>
+            )
+          }
+          upsell={
+            <>
+              <p className="mt-2 text-muted">
+                The Deep Report lists them one by one with their clicks before and after, reviews up to 500 pages
+                and gives you a prioritized action plan.
+              </p>
+              <a
+                href="#deep-report"
+                className="mt-4 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
+              >
+                {deepCta}
+              </a>
+            </>
+          }
+        />
+      )}
+
+      <p className="mt-10 text-xs text-muted">
         This is an estimate extrapolated from a small sample of public pages. It is not a guarantee, and Spamlyze is not
         affiliated with Google.
       </p>

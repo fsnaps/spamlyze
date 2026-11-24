@@ -41,14 +41,16 @@ type Props = {
   note?: ReactNode;
   /** Our verdict on a losing page (Deep Report), shown next to its click loss. */
   verdictOf?: (url: string) => string | undefined;
+  /** A secondary section (Quick Check page): neutral card and an outlined button, so the Deep Report stays the main action. */
+  quiet?: boolean;
 };
 
-export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, note, verdictOf }: Props) {
+export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, note, verdictOf, quiet }: Props) {
   if (!gsc && !enabled) return null;
   const message = result ? GSC_MESSAGES[result] : null;
   return (
-    <section id="search-console" className="mt-12 scroll-mt-8">
-      <h2 className="text-2xl font-semibold tracking-tight">Traffic around Google updates</h2>
+    <section id="search-console" className={`${quiet ? "mt-16 sm:mt-20" : "mt-12"} scroll-mt-8`}>
+      <h2 className={quiet ? "text-lg font-semibold" : "text-2xl font-semibold tracking-tight"}>Traffic around Google updates</h2>
       {note && <p className="mt-2 text-sm text-muted">{note}</p>}
       {message && (
         <p className="mt-4 rounded-xl border border-line bg-surface px-4 py-3 text-sm" role="status">
@@ -58,7 +60,7 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, n
       {gsc ? (
         <GscResults gsc={gsc} connectHref={connectHref} enabled={enabled} upsell={upsell} verdictOf={verdictOf} />
       ) : (
-        <div className="mt-6 rounded-2xl border-2 border-accent bg-surface p-6">
+        <div className={`mt-6 rounded-2xl bg-surface ${quiet ? "border border-line p-5 text-sm sm:p-6" : "border-2 border-accent p-6"}`}>
           <p className="leading-relaxed">
             {pitch ??
               "Connect Google Search Console to see whether your clicks actually dropped when a spam or core update rolled out, and which pages lost the most."}
@@ -70,7 +72,11 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, n
           <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
             <a
               href={connectHref}
-              className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
+              className={
+                quiet
+                  ? "inline-flex items-center justify-center rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-foreground/40"
+                  : "inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
+              }
             >
               Connect Search Console
             </a>

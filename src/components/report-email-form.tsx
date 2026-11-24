@@ -7,7 +7,7 @@ import { emailQuickReport, type ReportEmailState } from "@/app/actions";
 const initialState: ReportEmailState = { status: "idle", message: "" };
 
 /**
- * The email gate right under the Quick Check score. Sending it sets a cookie, so the server
+ * The email gate under the top 3 issues: quiet on purpose, the Deep Report is the main action. Sending it sets a cookie, so the server
  * re-renders the page unlocked in the same round trip; this component stays mounted to show the
  * confirmation.
  */
@@ -33,7 +33,7 @@ export function ReportEmailForm({
     return (
       <p
         role="status"
-        className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-800 print:hidden dark:text-emerald-300"
+        className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-800 print:hidden dark:text-emerald-300"
       >
         {state.message}
       </p>
@@ -41,34 +41,16 @@ export function ReportEmailForm({
   }
   if (unlocked) return null;
 
+  const rest = issues - 1;
   return (
-    <section
-      id="unlock"
-      className="sl-fade-up mt-4 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-5 [animation-delay:200ms] sm:p-6 print:hidden"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-semibold">Unlock your detailed Quick Check</h2>
-        <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-          Free
-        </span>
-      </div>
-      <p className="mt-2 text-muted">
-        You&apos;re seeing 1 of the {issues} issues we found
-        {flagged > 0 ? `, and ${flagged} of 5 spam signals need attention` : ""}. Enter your email to see them all
-        here and get a copy in your inbox.
+    <section id="unlock" className="mt-6 scroll-mt-24 rounded-xl bg-background p-5 sm:p-6 print:hidden">
+      <h3 className="font-semibold">
+        See {rest > 0 ? `the other ${rest === 1 ? "issue" : `${rest} issues`} and ` : ""}your 5 signal ratings, free
+      </h3>
+      <p className="mt-1 text-sm text-muted">
+        We&apos;ll show them here, email you a copy
+        {flagged > 0 ? ` (${flagged} of 5 signals need attention)` : ""}, and warn you when Google ships its next spam update.
       </p>
-      <ul className="mt-3 grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-3">
-        {["All 3 issues with their fixes", "The rating of each spam signal", "An alert at the next Google spam update"].map(
-          (t) => (
-            <li key={t} className="flex gap-2">
-              <span aria-hidden className="text-accent">
-                ✓
-              </span>
-              <span>{t}</span>
-            </li>
-          ),
-        )}
-      </ul>
       <form action={formAction} className="mt-4 flex flex-col gap-3 sm:flex-row">
         <input type="hidden" name="checkId" value={checkId} />
         <div aria-hidden="true" className="hidden">
@@ -87,22 +69,22 @@ export function ReportEmailForm({
           required
           placeholder="you@company.com"
           autoComplete="email"
-          className="h-12 w-full min-w-0 rounded-xl border border-line bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 sm:flex-1"
+          className="h-11 w-full min-w-0 rounded-lg border border-line bg-surface px-4 text-base outline-none focus:border-foreground/40 focus:ring-2 focus:ring-foreground/10 sm:flex-1"
         />
         <button
           type="submit"
           disabled={pending}
-          className="h-12 shrink-0 rounded-xl bg-accent px-6 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
+          className="h-11 shrink-0 rounded-lg border border-line bg-surface px-5 text-sm font-semibold transition hover:border-foreground/40 disabled:opacity-60"
         >
-          {pending ? "Unlocking…" : "Unlock for free"}
+          {pending ? "Sending…" : "Show me"}
         </button>
       </form>
       <p aria-live="polite" className="mt-2 text-sm text-red-600 empty:hidden dark:text-red-400">
         {state.status === "error" ? state.message : ""}
       </p>
-      <p className="mt-2 text-xs text-muted">
-        No spam: the report, then an email only when Google ships a spam update. Unsubscribe in one click.{" "}
-        <a href="/privacy" className="underline">
+      <p className="mt-3 text-xs text-muted">
+        No newsletter. Unsubscribe in one click.{" "}
+        <a href="/privacy" className="underline underline-offset-2">
           Privacy
         </a>
       </p>
@@ -113,7 +95,7 @@ export function ReportEmailForm({
 /** Stand-in lines under a locked item. Placeholder text only: the real content isn't sent to the browser. */
 export function LockedLines({ lines = 2 }: { lines?: number }) {
   return (
-    <div aria-hidden className="mt-3 space-y-2 select-none blur-[5px]">
+    <div aria-hidden className="mt-2 space-y-1.5 select-none blur-[5px]">
       {Array.from({ length: lines }, (_, i) => (
         <p key={i} className="text-sm text-muted">
           {i % 2 ? "Fix: rewrite the affected pages and keep only what serves visitors." : "Several sampled pages show this pattern across the site."}
@@ -123,10 +105,11 @@ export function LockedLines({ lines = 2 }: { lines?: number }) {
   );
 }
 
-export function UnlockLink() {
+/** Stand-in for a signal's rating while locked: a blurred pill, no icon. */
+export function LockedBadge() {
   return (
-    <a href="#unlock" className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-accent underline underline-offset-4">
-      <span aria-hidden>🔒</span> Unlock with your email, free
-    </a>
+    <span aria-label="Rating hidden" className="select-none rounded-full bg-stone-500/10 px-2.5 py-0.5 text-xs font-semibold text-muted">
+      <span aria-hidden className="blur-[3px]">Moderate</span>
+    </span>
   );
 }

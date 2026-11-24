@@ -15,6 +15,8 @@ import { coverage, pagesWord } from "@/lib/check/coverage";
 import { cookies } from "next/headers";
 import { LockedLines, ReportEmailForm, UnlockLink } from "@/components/report-email-form";
 import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
+import { benchmarkFor } from "@/lib/check/benchmark";
+import { RiskRank } from "@/components/risk-rank";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -244,6 +246,7 @@ async function Report({
   const range = scoreRange(a?.riskScore ?? 0, c);
   const unlocked =
     (await cookies()).has(unlockCookie(id)) || validUnlockToken(id, typeof query.u === "string" ? query.u : undefined);
+  const benchmark = a ? await benchmarkFor(a.riskScore) : null;
   const flagged = a ? a.signals.filter((s) => s.level === "moderate" || s.level === "high").length : 0;
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
@@ -277,6 +280,11 @@ async function Report({
               </div>
             </div>
             <div className="sl-fade-up min-w-0 flex-1 [animation-delay:300ms]">
+              {benchmark && (
+                <div className="mb-4">
+                  <RiskRank benchmark={benchmark} score={a.riskScore} />
+                </div>
+              )}
               <p className="leading-relaxed">{a.summary}</p>
               <div className="mt-4">
                 <CoverageNote sampled={sampled} c={c} />

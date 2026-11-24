@@ -124,11 +124,21 @@ body {
   stroke-dasharray: 24;
   animation: sl-draw 0.4s ease-out both;
 }
+/* The benchmark marker slides from the safest end to its place, in step with the score gauge. */
+@keyframes sl-slide-in {
+  from {
+    left: 0%;
+  }
+}
+.sl-slide-in {
+  animation: sl-slide-in 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
 @media (prefers-reduced-motion: reduce) {
   .sl-sweep,
   .sl-ping,
   .sl-fade-up,
   .sl-shimmer,
+  .sl-slide-in,
   .sl-check path {
     animation: none;
   }
@@ -142,7 +152,8 @@ body {
   body > footer {
     display: none;
   }
-  .sl-fade-up {
+  .sl-fade-up,
+  .sl-slide-in {
     animation: none;
   }
 }

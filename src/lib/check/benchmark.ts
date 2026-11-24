@@ -108,7 +108,7 @@ export async function benchmarkFor(score: number): Promise<Benchmark | null> {
 
 const pct = (n: number, total: number) => Math.round((n / total) * 100);
 
-/** "Riskier than 70% of" or "Lower risk than 85% of", followed by "the N sites analysed on Spamlyze". */
+/** "Riskier than 70%" or "Lower risk than 85%", followed by "of the sites analysed on Spamlyze" (no site count shown). */
 export function rankHeadline(b: Benchmark): { lead: string; percent: number; risky: boolean } {
   const riskierThan = pct(b.lower, b.total);
   const saferThan = pct(b.higher, b.total);
@@ -119,5 +119,5 @@ export function rankHeadline(b: Benchmark): { lead: string; percent: number; ris
 
 export const rankSentence = (b: Benchmark) => {
   const h = rankHeadline(b);
-  return `${h.lead} ${h.percent}% of the ${b.total.toLocaleString("en-US")} sites analysed on Spamlyze`;
+  return `${h.lead} ${h.percent}% of the sites analysed on Spamlyze`;
 };

@@ -19,7 +19,6 @@ export function RiskRank({ benchmark: b, score }: { benchmark: Benchmark; score:
   // Keep the "You" label inside the card near either end of the bar.
   const labelAlign =
     b.position < 12 ? "left-0" : b.position > 88 ? "right-0" : "left-1/2 -translate-x-1/2";
-  const sites = b.total.toLocaleString("en-US");
 
   return (
     <div className="rounded-xl border border-line p-4">
@@ -28,10 +27,10 @@ export function RiskRank({ benchmark: b, score }: { benchmark: Benchmark; score:
         <span className={`text-2xl font-semibold tabular-nums ${tone}`}>
           {h.lead} {h.percent}%
         </span>{" "}
-        <span className="text-muted">of the {sites} sites analysed on Spamlyze</span>
+        <span className="text-muted">of the sites analysed on Spamlyze</span>
       </p>
 
-      <div className="relative mt-9 mb-1" role="img" aria-label={`${h.lead} ${h.percent}% of ${sites} sites analysed. Risk score ${score} out of 100.`}>
+      <div className="relative mt-9 mb-1" role="img" aria-label={`${h.lead} ${h.percent}% of the sites analysed on Spamlyze. Risk score ${score} out of 100.`}>
         <div className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500" />
         <div className="sl-slide-in absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${b.position}%` }}>
           <div className={`absolute bottom-full mb-2 whitespace-nowrap ${labelAlign}`}>

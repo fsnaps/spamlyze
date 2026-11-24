@@ -102,7 +102,7 @@ function rankBox(b: Benchmark | null, score: number): string {
   const h = rankHeadline(b);
   const color = b.position >= 66 ? "#dc2626" : b.position >= 33 ? "#b45309" : "#047857";
   const left = Math.round(b.position);
-  return `<p style="margin:0 0 8px;font-size:15px"><strong style="color:${color}">${h.lead} ${h.percent}%</strong> <span style="${muted}">of the ${n(b.total)} sites analysed on Spamlyze</span></p>
+  return `<p style="margin:0 0 8px;font-size:15px"><strong style="color:${color}">${h.lead} ${h.percent}%</strong> <span style="${muted}">of the sites analysed on Spamlyze</span></p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px;border-collapse:collapse"><tr>
 <td width="${left}%" style="height:8px;background:#10b981;background-image:linear-gradient(90deg,#10b981,#fbbf24${left > 60 ? ",#ef4444" : ""});border-radius:4px 0 0 4px;font-size:0;line-height:0">&nbsp;</td>
 <td width="6" style="height:16px;background:#1c1917;border-radius:3px;font-size:0;line-height:0">&nbsp;</td>

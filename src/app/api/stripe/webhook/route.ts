@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { confirmPayment } from "@/lib/deep/job";
 import { fulfillCreditPurchase } from "@/lib/api/purchase";
+import { fulfillTopUpIntent } from "@/lib/api/topup";
 import { stripe } from "@/lib/stripe";
 
 // Backup for the success redirect: starts the report, or credits an API account, even if the
@@ -22,5 +23,6 @@ export async function POST(request: Request) {
       await confirmPayment(session.metadata.deepId, session.id);
     }
   }
+  if (event.type === "payment_intent.succeeded") await fulfillTopUpIntent(event.data.object);
   return new Response("ok");
 }

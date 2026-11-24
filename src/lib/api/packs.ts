@@ -20,3 +20,6 @@ export const getPack = (id: unknown): CreditPack | undefined =>
 
 /** Total credits added to the balance for a pack (price + bonus). */
 export const packCreditCents = (p: CreditPack) => p.priceCents + p.bonusCents;
+
+/** Balances under which an automatic top-up can be set to trigger, in cents. */
+export const TOP_UP_THRESHOLDS = [1_200, 2_500, 5_000, 10_000];

@@ -14,12 +14,40 @@ import { notifyAdmin } from "@/lib/notify";
 /** Swappable in tests (fake Stripe). */
 export const purchaseDeps = { stripe };
 
+/** The account's Stripe customer, created once. */
+async function stripeCustomer(accountId: string, email: string): Promise<string> {
+  const ref = accounts().doc(accountId);
+  const existing = (await ref.get()).get("stripeCustomerId") as string | undefined;
+  if (existing) return existing;
+  const c = await purchaseDeps.stripe().customers.create({ email, metadata: { accountId } }, { idempotencyKey: `customer_${accountId}` });
+  await ref.update({ stripeCustomerId: c.id });
+  return c.id;
+}
+
+/** Stores the card of a paid PaymentIntent on the account (brand and last 4 digits only). */
+export async function saveCard(accountId: string, paymentIntentId: string): Promise<void> {
+  try {
+    const pi = await purchaseDeps.stripe().paymentIntents.retrieve(paymentIntentId, { expand: ["payment_method"] });
+    const pm = pi.payment_method;
+    if (!pm || typeof pm === "string" || !pm.card) return;
+    await accounts()
+      .doc(accountId)
+      .update({
+        paymentMethod: { id: pm.id, brand: pm.card.brand, last4: pm.card.last4 },
+        ...(typeof pi.customer === "string" ? { stripeCustomerId: pi.customer } : {}),
+      });
+  } catch (err) {
+    console.error("save card failed", accountId, err instanceof Error ? err.message : err);
+  }
+}
+
 export async function createCreditCheckout(accountId: string, accountEmail: string, pack: CreditPack): Promise<string> {
   const total = packCreditCents(pack);
   const bonus = pack.bonusCents ? ` + $${(pack.bonusCents / 100).toFixed(0)} bonus` : "";
+  const customer = await stripeCustomer(accountId, accountEmail);
   const session = await purchaseDeps.stripe().checkout.sessions.create({
     mode: "payment",
-    customer_email: accountEmail,
+    customer,
     line_items: [
       {
         quantity: 1,
@@ -34,7 +62,8 @@ export async function createCreditCheckout(accountId: string, accountEmail: stri
       },
     ],
     metadata: { kind: "api_credits", accountId, packId: pack.id, creditCents: String(total) },
-    payment_intent_data: { metadata: { kind: "api_credits", accountId, packId: pack.id } },
+    // Saves the card for automatic top-ups (the customer can turn them on afterwards).
+    payment_intent_data: { setup_future_usage: "off_session", metadata: { kind: "api_credits", accountId, packId: pack.id } },
     success_url: `${site.url}/account?purchase={CHECKOUT_SESSION_ID}`,
     cancel_url: `${site.url}/account?purchase=canceled`,
   });
@@ -50,6 +79,7 @@ export async function fulfillCreditPurchase(session: {
   id: string;
   payment_status?: string | null;
   metadata?: Record<string, string> | null;
+  payment_intent?: string | { id: string } | null;
 }): Promise<{ handled: boolean; newlyCredited: boolean; cents: number }> {
   const none = { handled: false, newlyCredited: false, cents: 0 };
   if (session.metadata?.kind !== "api_credits" || session.payment_status !== "paid") return none;
@@ -60,6 +90,9 @@ export async function fulfillCreditPurchase(session: {
   const ref = `stripe_${session.id}`;
   const res = await addCredits(accountId, cents, "purchase", ref, `${pack.label} pack`);
   if (!res.replayed) {
+    const pi = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
+    if (pi) await saveCard(accountId, pi);
+    await accounts().doc(accountId).update({ lowBalanceAlertedAt: null });
     const name = (await accounts().doc(accountId).get()).get("name") ?? accountId;
     await Promise.all([
       track({ apiCreditsPurchasedCents: cents, revenueCents: pack.priceCents }),
@@ -85,7 +118,7 @@ export async function fulfillFromRedirect(accountId: string, sessionId: unknown)
   try {
     const session = await purchaseDeps.stripe().checkout.sessions.retrieve(sessionId);
     if (session.metadata?.accountId !== accountId) return null;
-    const res = await fulfillCreditPurchase({ id: session.id, payment_status: session.payment_status, metadata: session.metadata });
+    const res = await fulfillCreditPurchase(session);
     return res.newlyCredited ? res.cents : null;
   } catch (err) {
     console.error("credit redirect fulfill failed", err instanceof Error ? err.message : err);

@@ -56,6 +56,16 @@ async function readAccount(tx: Transaction, accountId: string) {
  * the balance is too low or the account's daily cap would be exceeded.
  */
 export async function chargeCredits(accountId: string, cents: number, reason: string, ref: string): Promise<Result> {
+  const res = await takeCredits(accountId, cents, reason, ref);
+  if (!res.replayed) {
+    // Automatic top-up or low-balance email. Loaded lazily: topup.ts depends on this module.
+    const { afterCharge } = await import("./topup");
+    await afterCharge(accountId, res.balanceCents + cents, res.balanceCents);
+  }
+  return res;
+}
+
+async function takeCredits(accountId: string, cents: number, reason: string, ref: string): Promise<Result> {
   checkRef(ref);
   if (!Number.isInteger(cents) || cents <= 0) throw new Error("charge must be a positive integer");
   const entryId = `charge_${ref}`;

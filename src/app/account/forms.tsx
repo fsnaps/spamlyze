@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
-import { createKeyAction, setWebhookAction, type NewKeyState, type WebhookState } from "./actions";
+import { createKeyAction, setAutoTopUpAction, setWebhookAction, type AutoTopUpState, type NewKeyState, type WebhookState } from "./actions";
 
 /** Starts a Stripe Checkout for a credit pack and sends the buyer to Stripe. */
 export function BuyCreditsForm({ accountId, packId }: { accountId: string; packId: string }) {
@@ -85,6 +85,49 @@ export function WebhookForm({ accountId, url }: { accountId: string; url: string
         </button>
       </div>
       <p className="mt-1 text-xs text-muted">Leave empty and save to stop webhooks.</p>
+      {state.error && <p className="mt-2 text-xs text-red-700 dark:text-red-300">{state.error}</p>}
+      {state.saved && !state.error && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">Saved.</p>}
+    </form>
+  );
+}
+
+export function AutoTopUpForm(props: {
+  accountId: string;
+  enabled: boolean;
+  thresholdCents: number;
+  packId: string;
+  thresholds: number[];
+  packs: { id: string; label: string; priceCents: number; creditCents: number }[];
+}) {
+  const [state, action, pending] = useActionState<AutoTopUpState, FormData>(setAutoTopUpAction, { error: null, saved: false });
+  const usd = (c: number) => `$${(c / 100).toFixed(0)}`;
+  return (
+    <form action={action} className="mt-3 text-sm">
+      <input type="hidden" name="accountId" value={props.accountId} />
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="enabled" defaultChecked={props.enabled} />
+          When my balance falls under
+        </label>
+        <select name="threshold" defaultValue={props.thresholdCents} className="rounded border border-line bg-transparent px-2 py-1">
+          {props.thresholds.map((t) => (
+            <option key={t} value={t}>
+              {usd(t)}
+            </option>
+          ))}
+        </select>
+        <span>buy</span>
+        <select name="packId" defaultValue={props.packId} className="rounded border border-line bg-transparent px-2 py-1">
+          {props.packs.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}: {usd(p.priceCents)} ({usd(p.creditCents)} of credits)
+            </option>
+          ))}
+        </select>
+        <button disabled={pending} className="rounded border border-line px-3 py-1 disabled:opacity-50">
+          {pending ? "Saving…" : "Save"}
+        </button>
+      </div>
       {state.error && <p className="mt-2 text-xs text-red-700 dark:text-red-300">{state.error}</p>}
       {state.saved && !state.error && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">Saved.</p>}
     </form>

@@ -19,6 +19,16 @@ export type ApiAccount = {
   webhookUrl?: string;
   /** Signs webhook payloads (HMAC-SHA256). Shown to the account, so it is stored as is. */
   webhookSecret?: string;
+  /** Stripe customer, created at the first credit purchase. */
+  stripeCustomerId?: string;
+  /** Card saved at a credit purchase, used for automatic top-ups (off-session). */
+  paymentMethod?: { id: string; brand: string; last4: string };
+  /** "Buy `packId` when the balance falls under `thresholdCents`". */
+  autoTopUp?: { enabled: boolean; thresholdCents: number; packId: string };
+  /** Top-ups done today (max 2), the one in progress, and the last failure. */
+  topUpState?: { day: string; count: number; inFlightUntil: number; lastError?: string | null };
+  /** Low balance alert already sent while under this threshold (reset when credits are added). */
+  lowBalanceAlertedAt?: number | null;
 };
 
 export const accounts = () => db().collection("apiAccounts");

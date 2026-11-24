@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { MAX_ACTIVE_KEYS, requireMyAccount } from "@/lib/account/access";
 import { createApiKey, keys, listApiKeys, revokeApiKey } from "@/lib/api/keys";
+import { accounts } from "@/lib/api/accounts";
+import { getPack, TOP_UP_THRESHOLDS } from "@/lib/api/packs";
 import { removeWebhook, setWebhook, validateWebhookUrl, WebhookUrlError } from "@/lib/api/webhooks";
 
 // Every action checks on its own that the account belongs to the signed-in email:
@@ -43,6 +45,25 @@ export async function setWebhookAction(_prev: WebhookState, formData: FormData):
     if (err instanceof WebhookUrlError) return { error: err.message, saved: false };
     throw err;
   }
+  revalidatePath("/account");
+  return { error: null, saved: true };
+}
+
+export type AutoTopUpState = { error: string | null; saved: boolean };
+
+export async function setAutoTopUpAction(_prev: AutoTopUpState, formData: FormData): Promise<AutoTopUpState> {
+  const { id, account } = await requireMyAccount(formData.get("accountId"));
+  const enabled = formData.get("enabled") === "on";
+  const thresholdCents = Number(formData.get("threshold"));
+  const pack = getPack(formData.get("packId"));
+  if (!TOP_UP_THRESHOLDS.includes(thresholdCents) || !pack) return { error: "Pick a threshold and a pack.", saved: false };
+  if (enabled && !account.paymentMethod) return { error: "Buy a pack once first: that saves your card for top-ups.", saved: false };
+  await accounts()
+    .doc(id)
+    .update({
+      autoTopUp: { enabled, thresholdCents, packId: pack.id },
+      ...(enabled ? { "topUpState.lastError": null } : {}),
+    });
   revalidatePath("/account");
   return { error: null, saved: true };
 }

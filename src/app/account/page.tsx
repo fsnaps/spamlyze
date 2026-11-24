@@ -9,17 +9,18 @@ import type { ApiAccount } from "@/lib/api/accounts";
 import { API_PRICES } from "@/lib/api/config";
 import { listLedger, spentToday } from "@/lib/api/credits";
 import { listApiKeys } from "@/lib/api/keys";
-import { CREDIT_PACKS, packCreditCents } from "@/lib/api/packs";
+import { CREDIT_PACKS, packCreditCents, TOP_UP_THRESHOLDS } from "@/lib/api/packs";
+import { MAX_TOP_UPS_PER_DAY } from "@/lib/api/topup";
 import { fulfillFromRedirect } from "@/lib/api/purchase";
 import { site } from "@/lib/site";
 import { revokeKeyAction } from "./actions";
-import { BuyCreditsForm, NewKeyForm, WebhookForm } from "./forms";
+import { AutoTopUpForm, BuyCreditsForm, NewKeyForm, WebhookForm } from "./forms";
 
 export const metadata: Metadata = { title: "API account", robots: { index: false, follow: false } };
 
 const usd = (cents: number) => `${cents < 0 ? "-" : ""}$${(Math.abs(cents) / 100).toFixed(2)}`;
 const date = (t: Timestamp | null | undefined) => (t ? t.toDate().toISOString().slice(0, 16).replace("T", " ") : "never");
-const REASONS: Record<string, string> = { quick_check: "Quick Check", deep_report: "Deep Report", manual: "Credits added", purchase: "Credits bought" };
+const REASONS: Record<string, string> = { quick_check: "Quick Check", deep_report: "Deep Report", manual: "Credits added", purchase: "Credits bought", auto_top_up: "Automatic top-up" };
 const what = (type: string, reason: string) =>
   type === "refund" ? `Refund: ${REASONS[reason] ?? reason}` : type === "credit" ? (REASONS[reason] ?? "Credits added") : (REASONS[reason] ?? reason);
 const ERRORS: Record<string, string> = {
@@ -147,6 +148,29 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
               </div>
             ))}
           </div>
+
+          <h3 className="mt-8 font-semibold">Automatic top-up</h3>
+          {a.paymentMethod ? (
+            <>
+              <p className="mt-1 text-xs text-muted">
+                Charges your <span className="capitalize">{a.paymentMethod.brand}</span> card ending in {a.paymentMethod.last4}, at most {MAX_TOP_UPS_PER_DAY} times a day. If a payment
+                fails we turn this off and email you.
+              </p>
+              {a.topUpState?.lastError && !a.autoTopUp?.enabled && (
+                <p className="mt-2 text-xs text-red-700 dark:text-red-300">Last top-up failed: {a.topUpState.lastError}</p>
+              )}
+              <AutoTopUpForm
+                accountId={a.id}
+                enabled={a.autoTopUp?.enabled ?? false}
+                thresholdCents={a.autoTopUp?.thresholdCents ?? TOP_UP_THRESHOLDS[0]}
+                packId={a.autoTopUp?.packId ?? CREDIT_PACKS[0].id}
+                thresholds={TOP_UP_THRESHOLDS}
+                packs={CREDIT_PACKS.map((p) => ({ id: p.id, label: p.label, priceCents: p.priceCents, creditCents: packCreditCents(p) }))}
+              />
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-muted">Buy a pack once: your card is saved securely by Stripe, then you can turn on automatic top-up here.</p>
+          )}
         </>
       )}
 

@@ -262,7 +262,7 @@ export async function runStep(id: string): Promise<DeepReport | null> {
     if (patch.status === "done" && !report.finishedAt && !report.rerunAt) {
       const analysis = patch.analysis as { riskScore: number; riskLevel: string } | undefined;
       await Promise.all([
-        report.email ? sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel) : null,
+        report.email ? sendDeepReady(report.email, id, report.domain, analysis?.riskScore, analysis?.riskLevel, Boolean(report.gsc)) : null,
         track({ deepDone: 1 }),
         report.accountId && patch.robotsBlocked !== true ? queueReportEvent(id, report.accountId, "report.done") : null,
       ]);

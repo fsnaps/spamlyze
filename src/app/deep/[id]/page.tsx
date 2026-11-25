@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { DeepRunner } from "@/components/deep-runner";
-import { GSC_MESSAGES, GscSection } from "@/components/gsc-section";
+import { DeepGscPitch } from "@/components/deep-gsc-pitch";
+import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { PrintButton } from "@/components/print-button";
 import { PurchaseTracker } from "@/components/purchase-tracker";
@@ -153,7 +154,6 @@ async function DeepView({
 /** Offers Search Console while the job runs, so the pages that lost clicks are reviewed first. */
 function GscWhileRunning({ id, report, result }: { id: string; report: DeepReport; result?: string }) {
   if (!gscEnabled() && !report.gsc) return null;
-  const message = result && result !== "connected" ? GSC_MESSAGES[result] : null;
   if (report.gsc) {
     const losers = report.gsc.losers;
     return (
@@ -167,24 +167,7 @@ function GscWhileRunning({ id, report, result }: { id: string; report: DeepRepor
       </div>
     );
   }
-  return (
-    <div id="search-console" className="mb-6 scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6">
-      {message && <p className="mb-4 rounded-xl border border-line px-4 py-3 text-sm">{message}</p>}
-      <p className="font-semibold">Recommended: connect Search Console while we work</p>
-      <p className="mt-2 leading-relaxed text-muted">
-        We&apos;ll find the pages that lost clicks after Google&apos;s spam and core updates, review those first, and
-        tie your action plan to your real traffic losses. Read-only, used once, and we don&apos;t keep access to your
-        account.
-      </p>
-      <a
-        href={`/api/gsc/connect?deep=${id}`}
-        className="mt-5 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 font-semibold text-white"
-      >
-        Connect Search Console
-      </a>
-      <p className="mt-3 text-xs text-muted">Optional. The analysis keeps running either way.</p>
-    </div>
-  );
+  return <DeepGscPitch id={id} stage="running" result={result} />;
 }
 
 async function FinishedReport({ id, report, gscResult }: { id: string; report: DeepReport; gscResult?: string }) {
@@ -243,6 +226,8 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
         </div>
       </section>
 
+      {/* Right under the score: the action plan below gets much sharper with real traffic losses. */}
+      {!report.gsc && gscEnabled() && <DeepGscPitch id={id} stage="done" result={gscResult} />}
       <section className="mt-12">
         <h2 className="text-2xl font-semibold tracking-tight">Action plan</h2>
         <ol className="mt-6 space-y-4">
@@ -324,17 +309,22 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
         </section>
       )}
 
-      <GscSection
-        connectHref={`/api/gsc/connect?deep=${id}`}
-        gsc={report.gsc}
-        result={gscResult}
-        enabled={gscEnabled()}
-        pitch="Connect Google Search Console: we'll find the pages that lost clicks after Google's spam and core updates, review them, and update your action plan around them. It takes a few minutes."
-        verdictOf={(url) => verdicts.get(pageKey(url))}
-      />
+      {/* Without Search Console data, the pitch at the top of the report is the way to connect. */}
+      {report.gsc && (
+        <GscSection
+          connectHref={`/api/gsc/connect?deep=${id}`}
+          gsc={report.gsc}
+          result={gscResult}
+          enabled={gscEnabled()}
+          verdictOf={(url) => verdicts.get(pageKey(url))}
+        />
+      )}
 
       <p className="mt-8 text-xs text-muted">
-        This report is an estimate based on public pages. It is not a guarantee, and Spamlyze is not affiliated with
+        {report.gsc
+          ? "This report is based on your public pages and your Search Console data."
+          : "This report is an estimate based on public pages only, without your traffic data."}{" "}
+        It is not a guarantee, and Spamlyze is not affiliated with
         Google.
       </p>
     </>

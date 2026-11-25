@@ -157,3 +157,10 @@ env:
     value: "europe-west1"
     availability:
       - RUNTIME
+
+  # Daily Claude budget for the whole public API, in USD (UTC day). Past it, new paid API calls
+  # get 503 budget_exhausted until midnight UTC; running reports finish. Admin email at 80 % and 100 %.
+  - variable: API_DAILY_CLAUDE_BUDGET_USD
+    value: "100"
+    availability:
+      - RUNTIME

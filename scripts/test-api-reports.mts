@@ -196,6 +196,12 @@ r = await read(created.id);
 const done = await json(r);
 assert.equal(done.status, "done", JSON.stringify(done.error));
 assert.equal((done.analysis as { riskScore: number }).riskScore, 12);
+// Its Claude cost (fake Opus: 1000 in, 100 out per call) is on the report and on the account's day.
+const { db: fdb } = await import("../src/lib/firebase-admin");
+const reportCost = (await fdb().collection("deepReports").doc(created.id).get()).get("claudeCostMicros") as number;
+assert.ok(reportCost > 0 && reportCost % (1000 * 4 + 100 * 20) === 0, `report cost ${reportCost}`);
+const today = new Date().toISOString().slice(0, 10);
+assert.equal((await accounts().doc(acct).collection("usage").doc(today).get()).get("claudeCostMicros"), reportCost);
 assert.equal(done.pages, undefined);
 assert.equal((done.progress as { pagesAnalyzed: number }).pagesAnalyzed, 21);
 r = await read(created.id, "?pages=true");

@@ -7,11 +7,12 @@ import { FetchBlockedError } from "@/lib/check/safe-fetch";
 import { computeMetrics } from "@/lib/check/metrics";
 import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
 import { stripe } from "@/lib/stripe";
-import { buildSummaryInput, judgePages, synthesize, type PageVerdict } from "./analyze";
+import { buildSummaryInput, DEEP_MODEL, judgePages, synthesize, type PageVerdict } from "./analyze";
 import { sendDeepReady, sendDeepStarted } from "./emails";
 import { enqueueDeepStep } from "./tasks";
 import { refundCharge } from "@/lib/api/credits";
 import { queueReportEvent } from "@/lib/api/webhook-events";
+import { recordApiClaudeCost } from "@/lib/api/costs";
 import { notifyAdmin } from "@/lib/notify";
 import { cancelFollowUp } from "@/lib/check/follow-up";
 import { site } from "@/lib/site";
@@ -437,6 +438,7 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
     );
     await write.commit();
     const usage = results.reduce((u, x) => ({ input: u.input + x.usage.input, output: u.output + x.usage.output }), { input: 0, output: 0 });
+    if (r.accountId) await recordApiClaudeCost(r.accountId, DEEP_MODEL(), usage, id);
     return {
       analyzeCursor: pages[pages.length - 1].index + 1,
       pagesAnalyzed: FieldValue.increment(pages.length),
@@ -473,6 +475,7 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
       },
     );
     const { analysis, usage } = await synthesize(input, new Set(all.map((p) => p.url)));
+    if (r.accountId) await recordApiClaudeCost(r.accountId, DEEP_MODEL(), usage, id);
     return {
       status: "done",
       phase: "done",

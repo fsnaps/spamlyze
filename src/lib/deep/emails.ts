@@ -1,5 +1,6 @@
 import "server-only";
 import { sendEmail } from "@/lib/brevo";
+import { gscEnabled } from "@/lib/gsc/oauth";
 import { site } from "@/lib/site";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -23,7 +24,19 @@ export function reportLink(id: string) {
   return `${site.url}/deep/${id}`;
 }
 
-export function sendDeepStarted(to: string, id: string, domain: string, maxPages = 500) {
+/** The case for Search Console, for reports that don't have it yet. */
+function gscBlock(id: string, intro: string) {
+  if (!gscEnabled()) return "";
+  return `<div style="margin:20px 0 0;padding:16px 18px;border:2px solid #dc2626;border-radius:12px">
+<p style="margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#dc2626">Strongly recommended</p>
+<p style="margin:0 0 8px;line-height:1.6;font-weight:600">Connect Google Search Console</p>
+<p style="margin:0 0 8px;line-height:1.6;color:#57534e">${intro} With your clicks before and after each spam and core update, the report tells you whether you were actually hit, and reviews the pages that lost traffic first. Without it, it can only estimate your exposure from public pages.</p>
+<p style="margin:0 0 12px;line-height:1.6;color:#57534e;font-size:13px">Read-only access: we import your clicks once, revoke the access right away and can't change anything in your account.</p>
+<p style="margin:0"><a href="${reportLink(id)}#search-console" style="color:#dc2626;font-weight:600">Connect Search Console from your report</a></p>
+</div>`;
+}
+
+export function sendDeepStarted(to: string, id: string, domain: string, maxPages = 500, hasGsc = false) {
   const d = escape(domain);
   return sendEmail(
     to,
@@ -31,14 +44,15 @@ export function sendDeepStarted(to: string, id: string, domain: string, maxPages
     layout(
       `Thanks! Your Deep Report for ${d} is starting`,
       `<p style="margin:0 0 12px;line-height:1.6;color:#57534e">We're reviewing up to ${maxPages} pages of ${d} one by one. It takes 5 to 15 minutes while the report page is open.</p>
-<p style="margin:0;line-height:1.6;color:#57534e">If you closed the page, open the link below: the analysis picks up where it left off. Keep this email to find your report again.</p>`,
+<p style="margin:0;line-height:1.6;color:#57534e">If you closed the page, open the link below: the analysis picks up where it left off. Keep this email to find your report again.</p>
+${hasGsc ? "" : gscBlock(id, "Do it while the analysis runs: it takes a minute.")}`,
       reportLink(id),
       "Follow your report",
     ),
   );
 }
 
-export function sendDeepReady(to: string, id: string, domain: string, score?: number, level?: string) {
+export function sendDeepReady(to: string, id: string, domain: string, score?: number, level?: string, hasGsc = false) {
   const d = escape(domain);
   const verdict =
     score === undefined ? "" : `<p style="margin:0 0 12px;line-height:1.6">Risk score: <strong>${score}/100</strong> (${escape(level ?? "")}).</p>`;
@@ -47,7 +61,8 @@ export function sendDeepReady(to: string, id: string, domain: string, score?: nu
     `Your Deep Report for ${domain} is ready`,
     layout(
       `Your Deep Report for ${d} is ready`,
-      `${verdict}<p style="margin:0;line-height:1.6;color:#57534e">Your prioritized action plan and the list of pages to review are waiting. You can save the report as a PDF from the page.</p>`,
+      `${verdict}<p style="margin:0;line-height:1.6;color:#57534e">Your prioritized action plan and the list of pages to review are waiting. You can save the report as a PDF from the page.</p>
+${hasGsc ? "" : gscBlock(id, "Your report doesn't include your traffic yet. Connect it and we update the report in a few minutes, at no extra cost.")}`,
       reportLink(id),
       "Open my report",
     ),

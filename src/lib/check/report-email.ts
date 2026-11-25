@@ -189,7 +189,7 @@ ${deepOffer(id, check, at, whole ? "See which pages are losing traffic" : "See w
 }
 
 export async function sendQuickReport(to: string, id: string, check: StoredCheck) {
-  const benchmark = check.analysis ? await benchmarkFor(check.analysis.riskScore) : null;
+  const benchmark = check.analysis ? await benchmarkFor(check.analysis.riskScore, check.analysis.scoreVersion) : null;
   const subject = check.analysis
     ? `Your detailed Quick Check for ${check.domain}: ${check.analysis.riskScore}/100`
     : `Your Quick Check for ${check.domain}`;

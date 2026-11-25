@@ -1,4 +1,5 @@
 import type { CrawlResult, PageData } from "./crawl";
+import { findUrlSeries, type UrlSeries } from "./scoring";
 
 const RISKY_TERMS = [
   "casino", "betting", "bet", "poker", "slots", "coupon", "promo code", "discount code", "voucher",
@@ -14,6 +15,10 @@ export type Metrics = {
   coversWholeSite?: boolean;
   avgWordCount: number;
   thinPageShare: number; // share of sampled pages under 300 words
+  /** Thin share extrapolated to every page we know of (since 2026-11-25). */
+  estimatedThinPages?: number | null;
+  /** Families of sitemap URLs built on one slug pattern (since 2026-11-25). */
+  urlSeries?: UrlSeries[];
   duplicateTitleShare: number;
   nearDuplicateShare: number; // share of pages whose text is >80% similar to another sampled page
   avgExternalLinksPerPage: number;
@@ -80,13 +85,17 @@ export function computeMetrics(crawl: CrawlResult): Metrics {
     prefixes.set(key, (prefixes.get(key) ?? 0) + 1);
   }
 
+  const thinPageShare = round(crawl.pages.filter((p) => p.wordCount < 300).length / Math.max(crawl.pages.length, 1));
+
   return {
     pagesAnalyzed: n,
     sitemapUrlCount: crawl.sitemapUrlCount,
     knownPageCount: crawl.knownPageCount,
     coversWholeSite: crawl.knownPageCount !== null && n >= crawl.knownPageCount,
     avgWordCount: Math.round(pages.reduce((s, p) => s + p.wordCount, 0) / Math.max(n, 1)),
-    thinPageShare: round(crawl.pages.filter((p) => p.wordCount < 300).length / Math.max(crawl.pages.length, 1)),
+    thinPageShare,
+    estimatedThinPages: crawl.knownPageCount !== null && crawl.pages.length ? Math.round(thinPageShare * crawl.knownPageCount) : null,
+    urlSeries: findUrlSeries(crawl.sitemapSample, crawl.sitemapUrlCount),
     duplicateTitleShare: round(dupTitles / Math.max(n, 1)),
     nearDuplicateShare: round(nearDup / Math.max(sh.length, 1)),
     avgExternalLinksPerPage: round(ext.length / Math.max(n, 1), 1),

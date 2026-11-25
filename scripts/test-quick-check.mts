@@ -123,4 +123,31 @@ assert.equal(coverage(15, { sitemapUrlCount: 300 }).unseen, 286);
 assert.equal(coverage(5, { sitemapUrlCount: 0 }).total, null, "an unreadable sitemap says nothing about size");
 assert.equal(coverage(5, { sitemapUrlCount: null }).total, null);
 
+// Scoring: the overall score follows the worst signal, with a small bonus for other elevated ones.
+const { overallScore, normalizeSignal, findUrlSeries, levelFor } = await import("../src/lib/check/scoring");
+const sig = (score: number, level: "low" | "moderate" | "high" | "unknown" = levelFor(score)) => ({ score, level });
+assert.equal(overallScore([sig(10), sig(12), sig(5)]), 12, "a clean site keeps its worst signal");
+assert.equal(overallScore([sig(70), sig(10), sig(5)]), 70, "one clear violation is enough to be high");
+assert.equal(overallScore([sig(50), sig(45), sig(40)]), 60, "50 + 15% of 45 + 8% of 40");
+assert.equal(overallScore([sig(95), sig(90), sig(90)]), 100);
+assert.equal(overallScore([sig(0, "unknown"), sig(20)]), 20, "unknown signals don't count");
+assert.equal(overallScore([]), 0);
+assert.deepEqual(normalizeSignal({ score: 45, level: "low" as const }), { score: 45, level: "moderate" }, "level follows score");
+assert.deepEqual(normalizeSignal({ score: 30, level: "unknown" as const }), { score: 0, level: "unknown" });
+
+// URL series: location and nationality variants are found, language prefixes ignored.
+const cities = ["jaslo", "mlawa", "krakow", "gdansk", "poznan", "lodz"];
+const series = findUrlSeries(
+  [
+    ...cities.map((c) => `/strony-internetowe-${c}/`),
+    ...["french", "german", "us", "uk", "indian"].map((n, i) => `${i % 2 ? "/en" : ""}/uzbekistan-visa-for-${n}-citizens`),
+    ...Array.from({ length: 30 }, (_, i) => `/blog/topic${i}-article${i}/`),
+  ],
+  410,
+);
+assert.deepEqual(series.map((x) => x.pattern), ["/strony-internetowe-*", "/uzbekistan-visa-*"]);
+assert.equal(series[0].estimatedPages, 60, "6/41 of the sample × 410 sitemap URLs");
+assert.equal(findUrlSeries(["/about/", "/contact/", "/a-b/"], 3).length, 0);
+assert.ok(Array.isArray(m.urlSeries), "metrics carry the URL series");
+
 console.log("all quick-check tests passed", JSON.stringify({ pages: result.pages.length, metrics: m }, null, 0).slice(0, 400));

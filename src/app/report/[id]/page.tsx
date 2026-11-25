@@ -171,7 +171,7 @@ function SiteWidePages({ total }: { total: number | null }) {
 }
 
 /** Next to the score: how much of the site the estimate is based on. */
-function CoverageNote({ sampled, c }: { sampled: number; c: Coverage }) {
+function CoverageNote({ sampled, c, lowScore }: { sampled: number; c: Coverage; lowScore: boolean }) {
   if (c.complete && c.total !== null) return <WholeSiteNote total={c.total} />;
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-900 dark:text-amber-200">
@@ -198,6 +198,12 @@ function CoverageNote({ sampled, c }: { sampled: number; c: Coverage }) {
               Check every page
             </a>
           </p>
+          {lowScore && (
+            <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-200/80">
+              Lost traffic after an update anyway? The cause can sit in pages this sample didn&apos;t include, or come from a
+              core update rather than spam. Only your Search Console data can tell.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -269,7 +275,7 @@ async function Report({
   const range = scoreRange(a?.riskScore ?? 0, c);
   const unlocked =
     (await cookies()).has(unlockCookie(id)) || validUnlockToken(id, typeof query.u === "string" ? query.u : undefined);
-  const benchmark = a ? await benchmarkFor(a.riskScore) : null;
+  const benchmark = a ? await benchmarkFor(a.riskScore, a.scoreVersion) : null;
   const flagged = a ? a.signals.filter((s) => s.level === "moderate" || s.level === "high").length : 0;
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
@@ -310,7 +316,7 @@ async function Report({
               )}
               <p className="leading-relaxed">{a.summary}</p>
               <div className="mt-5">
-                <CoverageNote sampled={sampled} c={c} />
+                <CoverageNote sampled={sampled} c={c} lowScore={a.riskScore < 30} />
               </div>
             </div>
           </section>

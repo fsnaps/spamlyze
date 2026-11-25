@@ -40,7 +40,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       riskScore: 22,
       riskLevel: "low",
       summary: "The sampled pages look like a normal site.",
-      signals: [{ id: "scaled_content", level: "low", score: 10, finding: "Varied pages.", exampleUrls: [] }],
+      signals: [{ id: "scaled_content", level: "low", score: 22, finding: "Varied pages.", exampleUrls: [] }],
       topIssues: [{ title: "Add authors", why: "Trust.", fix: "Add bylines.", exampleUrls: [] }],
     };
     return Response.json({

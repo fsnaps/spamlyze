@@ -70,6 +70,8 @@ export type FetchedPage = {
 function isChallenge(res: Response, body: string): boolean {
   if (/challenge/i.test(res.headers.get("x-vercel-mitigated") ?? "")) return true;
   if (/challenge/i.test(res.headers.get("cf-mitigated") ?? "")) return true;
+  // CrowdSec answers 200 with a captcha or ban page: only a short page naming it counts.
+  if (body.length < 20_000 && /crowdsec/i.test(body) && /captcha|access (denied|forbidden)|blocked/i.test(body)) return true;
   if (res.status !== 403 && res.status !== 429 && res.status !== 503) return false;
   return /Vercel Security Checkpoint|cf-chl-|challenge-platform|Just a moment\.\.\.|Attention Required! \| Cloudflare|_Incapsula_|px-captcha|DataDome/i.test(
     body.slice(0, 50_000),

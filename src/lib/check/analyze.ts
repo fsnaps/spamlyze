@@ -138,6 +138,11 @@ export async function analyze(
       ? normalizeSignal({ ...s, exampleUrls: urls(s.exampleUrls) })
       : { id, level: "unknown" as const, score: 0, finding: "Not enough data in the sample.", exampleUrls: [] };
   });
+  // Nothing could be judged (a firewall or error page instead of the site): no score beats a fake 0.
+  if (signals.every((s) => s.level === "unknown")) {
+    console.error("quick check: every signal unknown", crawl.origin);
+    throw new AnalysisError("We couldn't read enough of this site to score it. A firewall may be blocking SpamlyzeBot.");
+  }
   const riskScore = overallScore(signals);
   const analysis: Analysis = {
     ...parsed,

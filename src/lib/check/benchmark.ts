@@ -18,7 +18,8 @@ import { SCORE_VERSION } from "./scoring";
  * aggregate, and a domain doc scored under an older version counts as a new site.
  */
 
-const aggregate = () => db().collection("aggregates").doc(SCORE_VERSION === 1 ? "riskScores" : `riskScores-v${SCORE_VERSION}`);
+// v1 scores lived in "riskScores"; each later version gets its own document.
+const aggregate = () => db().collection("aggregates").doc(`riskScores-v${SCORE_VERSION}`);
 /** Below this many sites, the comparison says nothing useful and isn't shown. */
 const MIN_SITES = 20;
 const domainDoc = (domain: string) => db().collection("riskScoreByDomain").doc(domain.slice(0, 200));

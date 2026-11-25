@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { SIGNAL_IDS } from "@/lib/check/analyze";
+import { levelFor, normalizeSignal, overallScore, RUBRIC, SCORE_VERSION } from "@/lib/check/scoring";
 import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
 import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
@@ -118,19 +119,18 @@ export async function judgePages(homepage: PageData, pages: PageData[]): Promise
 
 const Level = z.enum(["low", "moderate", "high", "unknown"]);
 
+// The model rates each signal; riskScore and riskLevel are computed from them (see scoring.ts).
 const OverviewSchema = z.object({
-  riskScore: z.number().int(),
-  riskLevel: z.enum(["low", "moderate", "high"]),
-  summary: z.string(),
   signals: z.array(
     z.object({
       id: z.enum(SIGNAL_IDS),
-      level: Level,
-      score: z.number().int(),
       finding: z.string(),
       exampleUrls: z.array(z.string()),
+      score: z.number().int(),
+      level: Level,
     }),
   ),
+  summary: z.string(),
 });
 
 const ActionSchema = z.object({
@@ -145,7 +145,13 @@ const ActionSchema = z.object({
 });
 const PlanSchema = z.object({ actions: z.array(ActionSchema) });
 
-export type DeepAnalysis = z.infer<typeof OverviewSchema> & { actions: z.infer<typeof ActionSchema>[] };
+export type DeepAnalysis = z.infer<typeof OverviewSchema> & {
+  riskScore: number;
+  riskLevel: "low" | "moderate" | "high";
+  /** Scoring version (absent = v1: one free AI number, before 2026-11-25). */
+  scoreVersion?: number;
+  actions: z.infer<typeof ActionSchema>[];
+};
 
 export type SiteSummaryInput = {
   site: string;
@@ -267,9 +273,11 @@ const OVERVIEW_SYSTEM = `You are Spamlyze, an SEO analyst. You get the results o
 
 ${POLICIES}
 
+${RUBRIC}
+
 Rules:
-- Most legitimate sites are low risk. Rate moderate or high only when the data shows it, and say what in the data shows it (counts, shares, sections).
-- riskScore is 0-100 (0-29 low, 30-59 moderate, 60-100 high); each signal score uses the same scale.
+- Say what in the data supports each score (counts, shares, sections, URL patterns). Write each finding before deciding its score. Weigh qualityCounts and flaggedBySection: the share of weak or spammy pages across the review matters more than any single page.
+- The overall risk is driven by the worst signal: the summary leads with it, and doesn't call the site "low risk" when a signal is 30 or more.
 - Return exactly one entry per signal id. Use "unknown" only when the data gives no basis to judge.
 - summary: 3-4 sentences for the site owner. finding: 2-3 sentences with numbers from the input. exampleUrls: up to 5 URLs from the input.
 - coverage.sitemapStatus: recommend creating a sitemap only when it is "none". When it is "unreadable", the sitemap exists but our crawler couldn't load it (firewall, anti-bot challenge, timeout): say so, and suggest making sure search engines can fetch it. Never claim the site has 0 URLs in its sitemap in that case.
@@ -293,8 +301,6 @@ Rules:
 - If searchConsole is present, pages that both lost clicks after an update and were rated weak or spammy come first ("now"): list them in affectedUrls and quote their click loss in "why" (e.g. "lost 120 → 15 clicks per 28 days after the March 2024 spam update"). Flagged pages without a traffic loss come after.
 ${UNTRUSTED}`;
 
-const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
-
 export async function synthesize(input: SiteSummaryInput, knownUrls: Set<string>): Promise<{ analysis: DeepAnalysis; usage: Usage }> {
   const text = `<review>\n${JSON.stringify(input, null, 1)}\n</review>`;
   const opts = { effort: "medium" as const, maxTokens: 16000, timeoutMs: 55_000 };
@@ -304,16 +310,19 @@ export async function synthesize(input: SiteSummaryInput, knownUrls: Set<string>
   ]);
   const urls = (list: string[]) => list.filter((u) => knownUrls.has(u)).slice(0, 5);
   const o = overview.data;
+  const signals = SIGNAL_IDS.map((id) => {
+    const s = o.signals.find((x) => x.id === id);
+    return s
+      ? normalizeSignal({ ...s, exampleUrls: urls(s.exampleUrls) })
+      : { id, level: "unknown" as const, score: 0, finding: "Not enough data to judge.", exampleUrls: [] };
+  });
+  const riskScore = overallScore(signals);
   const analysis: DeepAnalysis = {
-    riskScore: clamp(o.riskScore),
-    riskLevel: o.riskLevel,
+    riskScore,
+    riskLevel: levelFor(riskScore),
+    scoreVersion: SCORE_VERSION,
     summary: o.summary,
-    signals: SIGNAL_IDS.map((id) => {
-      const s = o.signals.find((x) => x.id === id);
-      return s
-        ? { ...s, score: clamp(s.score), exampleUrls: urls(s.exampleUrls) }
-        : { id, level: "unknown" as const, score: 0, finding: "Not enough data to judge.", exampleUrls: [] };
-    }),
+    signals,
     actions: plan.data.actions.slice(0, 8).map((a) => ({ ...a, affectedUrls: urls(a.affectedUrls), steps: a.steps.slice(0, 4) })),
   };
   return {

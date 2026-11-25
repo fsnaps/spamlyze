@@ -41,7 +41,7 @@ function claudeReply(body: { system: string; messages: { content: string }[] }) 
   } else if (body.system.includes("action plan")) {
     out = { actions: [{ title: "Keep going", priority: "later", effort: "low", signal: "scaled_content", why: "Fine.", steps: ["Nothing"], affectedPattern: "", affectedUrls: [] }] };
   } else {
-    out = { riskScore: 12, riskLevel: "low", summary: "Fine.", signals: [] };
+    out = { summary: "Fine.", signals: [{ id: "thin_doorway", level: "low", score: 12, finding: "A few short pages.", exampleUrls: [] }] };
   }
   return Response.json({
     id: "msg_test", type: "message", role: "assistant", model: "claude-opus-5-5",

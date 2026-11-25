@@ -101,10 +101,21 @@ function windows(u: RankingUpdate, lastDay: number) {
 
 const change = (a: number, b: number) => (a > 0 ? (b - a) / a : 0);
 
-function verdictFor(clicksChange: number, beforeClicks: number): UpdateImpact["verdict"] {
+/**
+ * How many standard errors separate the daily click averages before and after (Poisson noise,
+ * after window counted at its 14-day minimum). Small sites swing ±25% on noise alone: 2.5 → 1.9
+ * clicks a day is not a hit.
+ */
+function dropSignificance(beforeClicks: number, afterClicks: number): number {
+  const se = Math.sqrt(beforeClicks / WINDOW_DAYS + afterClicks / MIN_AFTER_DAYS);
+  return se > 0 ? (beforeClicks - afterClicks) / se : 0;
+}
+
+function verdictFor(clicksChange: number, beforeClicks: number, afterClicks: number): UpdateImpact["verdict"] {
   if (beforeClicks < 1) return "stable";
-  if (clicksChange <= -0.2) return "hit";
-  if (clicksChange <= -0.1) return "possible";
+  const z = dropSignificance(beforeClicks, afterClicks);
+  if (clicksChange <= -0.2 && z >= 3) return "hit";
+  if (clicksChange <= -0.1 && z >= 2) return "possible";
   if (clicksChange >= 0.1) return "gain";
   return "stable";
 }
@@ -145,7 +156,7 @@ export async function importSearchData(token: string, property: string): Promise
       afterClicks,
       clicksChange,
       impressionsChange: change(avg(daily, w.before.from, w.before.to, "i"), avg(daily, w.after.from, w.after.to, "i")),
-      verdict: verdictFor(clicksChange, beforeClicks),
+      verdict: verdictFor(clicksChange, beforeClicks, afterClicks),
     });
   }
 

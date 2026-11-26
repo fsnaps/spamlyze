@@ -11,12 +11,13 @@ import { GscSection } from "@/components/gsc-section";
 import { gscEnabled } from "@/lib/gsc/oauth";
 import { getQuickImport } from "@/lib/gsc/imports";
 import { SIGNAL_LABELS } from "@/lib/check/labels";
-import { coverage, pagesWord } from "@/lib/check/coverage";
+import { coverage, pagesWord, quickHeadline } from "@/lib/check/coverage";
 import { cookies } from "next/headers";
 import { LockedBadge, LockedLines, ReportEmailForm } from "@/components/report-email-form";
 import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
 import { benchmarkFor } from "@/lib/check/benchmark";
 import { RiskRank } from "@/components/risk-rank";
+import { HitQuestion } from "@/components/hit-question";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -170,6 +171,53 @@ function SiteWidePages({ total }: { total: number | null }) {
   );
 }
 
+/**
+ * Partial checks lead with this instead of the score gauge: how many pages were checked, as a
+ * share of the site. A score from a small sample must not read as a verdict on the whole site.
+ */
+function CoverageMeter({ sampled, c }: { sampled: number; c: Coverage }) {
+  const R = 52;
+  const circ = 2 * Math.PI * R;
+  const share = c.share ?? 0;
+  return (
+    <div className="relative mx-auto size-40">
+      <svg viewBox="0 0 120 120" className="size-full -rotate-90" aria-hidden>
+        <circle cx="60" cy="60" r={R} fill="none" stroke="var(--line)" strokeWidth="9" />
+        {c.share !== null && (
+          <circle
+            cx="60"
+            cy="60"
+            r={R}
+            fill="none"
+            stroke="#f59e0b"
+            strokeWidth="9"
+            strokeLinecap="round"
+            strokeDasharray={`${(circ * share) / 100} ${circ}`}
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-5xl font-semibold tabular-nums">{sampled}</span>
+        <span className="mt-1 text-xs text-muted">{c.total !== null ? `of ${fmt(c.total)} pages` : pagesWord(sampled)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Partial checks: the score, demoted to what it is, a reading of the sample only. */
+function SampleScore({ score, level, range, sampled }: { score: number; level: string; range: { low: number; high: number }; sampled: number }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <span className="text-muted">Sample score</span>
+      <span className="font-semibold tabular-nums">{score}/100</span>
+      <LevelBadge level={level} />
+      <span className="text-xs tabular-nums text-muted">
+        rough range {range.low}–{range.high}, from these {sampled} {pagesWord(sampled)} only
+      </span>
+    </div>
+  );
+}
+
 /** Next to the score: how much of the site the estimate is based on. */
 function CoverageNote({ sampled, c, lowScore }: { sampled: number; c: Coverage; lowScore: boolean }) {
   if (c.complete && c.total !== null) return <WholeSiteNote total={c.total} />;
@@ -277,6 +325,7 @@ async function Report({
     (await cookies()).has(unlockCookie(id)) || validUnlockToken(id, typeof query.u === "string" ? query.u : undefined);
   const benchmark = a ? await benchmarkFor(a.riskScore, a.scoreVersion) : null;
   const flagged = a ? a.signals.filter((s) => s.level === "moderate" || s.level === "high").length : 0;
+  const head = quickHeadline(sampled, c, flagged);
   const date = check.createdAt?.toDate?.().toLocaleDateString("en-US", { dateStyle: "medium" }) ?? "";
 
   return (
@@ -297,29 +346,106 @@ async function Report({
         </p>
       ) : (
         <>
-          <section className="sl-fade-up mt-8 flex flex-col gap-8 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center sm:p-8">
-            <div className="shrink-0 text-center sm:w-40">
-              <ScoreGauge score={a.riskScore} level={a.riskLevel} />
-              <p className="-mt-3 text-sm text-muted">estimated risk</p>
-              <p className="mt-1 text-xs tabular-nums text-muted">
-                rough range {range.low}–{range.high}
-              </p>
-              <div className="mt-2">
-                <LevelBadge level={a.riskLevel} />
-              </div>
-            </div>
-            <div className="sl-fade-up min-w-0 flex-1 [animation-delay:300ms]">
-              {benchmark && (
-                <div className="mb-4">
-                  <RiskRank benchmark={benchmark} score={a.riskScore} />
+          {head.scoreIsVerdict ? (
+            <section className="sl-fade-up mt-8 flex flex-col gap-8 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-center sm:p-8">
+              <div className="shrink-0 text-center sm:w-40">
+                <ScoreGauge score={a.riskScore} level={a.riskLevel} />
+                <p className="-mt-3 text-sm text-muted">estimated risk</p>
+                <p className="mt-1 text-xs tabular-nums text-muted">
+                  rough range {range.low}–{range.high}
+                </p>
+                <div className="mt-2">
+                  <LevelBadge level={a.riskLevel} />
                 </div>
-              )}
-              <p className="leading-relaxed">{a.summary}</p>
-              <div className="mt-5">
-                <CoverageNote sampled={sampled} c={c} lowScore={a.riskScore < 30} />
               </div>
-            </div>
-          </section>
+              <div className="sl-fade-up min-w-0 flex-1 [animation-delay:300ms]">
+                {benchmark && (
+                  <div className="mb-4">
+                    <RiskRank benchmark={benchmark} score={a.riskScore} />
+                  </div>
+                )}
+                <p className="leading-relaxed">{a.summary}</p>
+                <div className="mt-5">
+                  <CoverageNote sampled={sampled} c={c} lowScore={a.riskScore < 30} />
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="sl-fade-up mt-8 flex flex-col gap-8 rounded-2xl border border-line bg-surface p-6 sm:flex-row sm:items-start sm:p-8">
+              <div className="shrink-0 text-center sm:w-40">
+                <CoverageMeter sampled={sampled} c={c} />
+                <p className="-mt-1 text-sm text-muted">pages checked</p>
+                {c.share !== null && (
+                  <p className="mt-1 text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+                    {c.share}% of your site
+                  </p>
+                )}
+              </div>
+              <div className="sl-fade-up min-w-0 flex-1 [animation-delay:300ms]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  Partial check
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold leading-snug tracking-tight">{head.title}</h2>
+                <p className="mt-2 font-medium text-amber-800 dark:text-amber-200">
+                  {head.detail}{" "}
+                  <a href="#deep-report" className="whitespace-nowrap font-semibold underline underline-offset-4 print:hidden">
+                    Check every page
+                  </a>
+                </p>
+                <p className="mt-4 leading-relaxed">{a.summary}</p>
+                <div className="mt-5 rounded-xl border border-line p-4">
+                  <SampleScore score={a.riskScore} level={a.riskLevel} range={range} sampled={sampled} />
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                    {flagged > 0
+                      ? "It rates the pages we saw, not your whole site."
+                      : "A low score here only means these pages look clean. It isn't a verdict on your whole site."}{" "}
+                    Lost traffic after an update anyway? The cause can sit in the pages we didn&apos;t check, and only your
+                    Search Console data can show which ones.
+                  </p>
+                  {benchmark && (
+                    <div className="mt-4">
+                      <RiskRank benchmark={benchmark} score={a.riskScore} title="Sample score compared with other sites" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+          <div className="sl-fade-up mt-6 [animation-delay:150ms]">
+            <HitQuestion
+              kind="check"
+              id={id}
+              replies={{
+                yes: (
+                  <>
+                    <span className="font-semibold text-foreground">Then don&apos;t go by this score.</span>{" "}
+                    {head.scoreIsVerdict
+                      ? "This check saw your pages, not your traffic."
+                      : `This check saw ${sampled} ${pagesWord(sampled)}, and the pages that lost traffic may not be among them.`}{" "}
+                    The Deep Report connects your Search Console, finds the pages that lost clicks and when, and reviews them
+                    first.{" "}
+                    <a href="#deep-report" className="whitespace-nowrap font-semibold text-accent">
+                      Find the pages that lost traffic →
+                    </a>
+                  </>
+                ),
+                unsure: (
+                  <>
+                    Your Search Console can tell.{" "}
+                    <a href="#search-console" className="font-semibold text-foreground underline underline-offset-4">
+                      Connect it for free
+                    </a>{" "}
+                    (read-only) to see your clicks around each Google update, or let the{" "}
+                    <a href="#deep-report" className="font-semibold text-foreground underline underline-offset-4">
+                      Deep Report
+                    </a>{" "}
+                    do it for you.
+                  </>
+                ),
+                no: "Good. Google runs several spam updates a year: run a Quick Check again after the next one.",
+              }}
+            />
+          </div>
           <DeepNextStep
             sampled={sampled}
             c={c}

@@ -33,6 +33,9 @@ export const STAT_KEYS = [
   "apiAuthFailures",
   "apiRateLimited",
   "apiCreditsPurchasedCents",
+  "hitYes",
+  "hitNo",
+  "hitUnsure",
 ] as const;
 export type StatKey = (typeof STAT_KEYS)[number];
 export type DayStats = Partial<Record<StatKey, number>> & { day: string };

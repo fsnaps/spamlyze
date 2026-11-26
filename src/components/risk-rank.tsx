@@ -4,7 +4,15 @@ import { rankHeadline, type Benchmark } from "@/lib/check/benchmark";
  * Next to the score: where this site sits among every site analysed on Spamlyze, on a
  * safest → riskiest bar. Complements the score, never replaces it.
  */
-export function RiskRank({ benchmark: b, score }: { benchmark: Benchmark; score: number }) {
+export function RiskRank({
+  benchmark: b,
+  score,
+  title = "Compared with other sites",
+}: {
+  benchmark: Benchmark;
+  score: number;
+  title?: string;
+}) {
   const h = rankHeadline(b);
   // Same colors as the score gauge: green, amber, red, by the zone of the bar the site falls in.
   const zone = b.position >= 66 ? "red" : b.position >= 33 ? "amber" : "green";
@@ -22,7 +30,7 @@ export function RiskRank({ benchmark: b, score }: { benchmark: Benchmark; score:
 
   return (
     <div className="rounded-xl border border-line p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Compared with other sites</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</p>
       <p className="mt-1 leading-snug">
         <span className={`text-2xl font-semibold tabular-nums ${tone}`}>
           {h.lead} {h.percent}%

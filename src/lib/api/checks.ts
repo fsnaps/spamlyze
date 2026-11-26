@@ -4,6 +4,8 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AnalysisError } from "@/lib/check/analyze";
 import { CrawlError } from "@/lib/check/crawl";
 import { cachedCheck } from "@/lib/check/guard";
+import { coverage, quickHeadline } from "@/lib/check/coverage";
+import { recordHitAnswer, type HitAnswer } from "@/lib/hit";
 import { domainOf, executeQuickCheck, getCheck, type StoredCheck } from "@/lib/check/run";
 import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
 import { db } from "@/lib/firebase-admin";
@@ -41,8 +43,33 @@ async function releaseSlot(accountId: string, requestId: string) {
     .catch((err) => console.error("slot release failed", err instanceof Error ? err.message : err));
 }
 
+/**
+ * How much of the site the check saw, so integrators don't read a sample score as a verdict.
+ * scoreScope is "whole_site" only when every page we found was analyzed.
+ */
+export function serializeCoverage(c: StoredCheck) {
+  const cov = coverage(c.pagesAnalyzed, c.metrics);
+  const flagged = c.analysis?.signals.filter((s) => s.level === "moderate" || s.level === "high").length ?? 0;
+  const head = quickHeadline(c.pagesAnalyzed, cov, flagged);
+  return {
+    headline: c.analysis ? (head.scoreIsVerdict ? null : head.title) : null,
+    coverage: {
+      pagesChecked: c.pagesAnalyzed,
+      knownPages: cov.total,
+      pagesNotChecked: cov.total === null ? null : cov.unseen,
+      percent: cov.complete ? 100 : cov.share,
+      complete: cov.complete,
+      scoreScope: head.scoreIsVerdict ? "whole_site" : "sample",
+      message: head.scoreIsVerdict
+        ? `All ${cov.total} pages we found were checked: the risk score covers the whole site. It does not use Search Console traffic.`
+        : `${head.detail} The risk score only describes the ${c.pagesAnalyzed} pages checked and is not a verdict on the whole site. A Deep Report checks the rest with Search Console data.`,
+    },
+  };
+}
+
 /** The public JSON shape of a quick check. */
 export function serializeCheck(id: string, c: StoredCheck, extra: Record<string, unknown> = {}) {
+  const { headline, coverage } = serializeCoverage(c);
   return {
     id,
     object: "quick_check",
@@ -50,7 +77,9 @@ export function serializeCheck(id: string, c: StoredCheck, extra: Record<string,
     url: c.url,
     createdAt: c.createdAt?.toDate().toISOString() ?? null,
     pagesAnalyzed: c.pagesAnalyzed,
-    note: "Estimate from a sample of about 15 pages. Order a Deep Report for a page-by-page audit with Search Console data.",
+    note: coverage.message,
+    headline,
+    coverage,
     riskScore: c.analysis?.riskScore ?? null,
     riskLevel: c.analysis?.riskLevel ?? null,
     summary: c.analysis?.summary ?? null,
@@ -66,7 +95,7 @@ export function serializeCheck(id: string, c: StoredCheck, extra: Record<string,
  * POST /v1/checks. Charges the account, runs (or reuses, within 24 h) a quick check, and refunds
  * automatically when no analysis comes out of it.
  */
-export async function createApiCheck(ctx: ApiContext, rawUrl: unknown): Promise<Response> {
+export async function createApiCheck(ctx: ApiContext, rawUrl: unknown, hit?: HitAnswer): Promise<Response> {
   let url: URL;
   try {
     url = normalizeInputUrl(typeof rawUrl === "string" ? rawUrl : "");
@@ -122,17 +151,20 @@ export async function createApiCheck(ctx: ApiContext, rawUrl: unknown): Promise<
       );
     }
 
+    if (hit) await recordHitAnswer({ kind: "check", id: checkId, domain: check.domain, answer: hit, source: "api", accountId: ctx.accountId });
     await requests(ctx.accountId).doc(requestId).set({
       type: "quick_check",
       checkId,
       cached,
       cents: price,
       keyId: ctx.keyId,
+      ...(hit ? { hitBySpamUpdate: hit } : {}),
       createdAt: FieldValue.serverTimestamp(),
     });
     return Response.json(
       serializeCheck(checkId, check, {
         cached,
+        hitBySpamUpdate: hit ?? null,
         charged: { cents: price, currency: "usd" },
         balance: { cents: balanceCents, currency: "usd" },
       }),

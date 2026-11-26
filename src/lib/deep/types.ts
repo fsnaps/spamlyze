@@ -2,6 +2,7 @@ import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
 import type { DeepAnalysis, PageVerdict } from "./analyze";
 import type { GscData, PageLoss } from "@/lib/gsc/data";
+import type { HitAnswer } from "@/lib/hit-answers";
 
 export type DeepPhase = "discover" | "crawl" | "analyze" | "synthesize" | "done";
 export type DeepStatus = "awaiting_payment" | "running" | "done" | "failed";
@@ -69,6 +70,8 @@ export type DeepReport = {
   gscPending?: boolean;
   /** The losing pages were folded in once. A later refresh only updates the figures. */
   gscMerged?: boolean;
+  /** The owner's answer to "Did your traffic drop after a spam update?" (progress page or API). */
+  hitAnswer?: HitAnswer;
 };
 
 /** One crawled page, stored in deepReports/{id}/pages/{index}. */

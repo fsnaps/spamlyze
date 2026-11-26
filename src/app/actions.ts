@@ -11,6 +11,9 @@ import { unlockCookie } from "@/lib/check/unlock";
 import { cancelFollowUp } from "@/lib/check/follow-up";
 import { track } from "@/lib/stats";
 import { db } from "@/lib/firebase-admin";
+import { isHitAnswer, recordHitAnswer } from "@/lib/hit";
+import { getDeepReport, isDeepId } from "@/lib/deep/job";
+import { canViewDeep } from "@/lib/deep/access";
 
 export type WaitlistState = {
   status: "idle" | "success" | "error";
@@ -222,4 +225,22 @@ export async function emailQuickReport(
       ? `Unlocked and sent to ${email}. We'll also warn you when Google rolls out a spam update.`
       : "Unlocked. We couldn't send the email right now, but everything is below.",
   };
+}
+
+/**
+ * "Were you hit by a Google spam update?" on a Quick Check or a Deep Report. Answering never
+ * changes a score: it changes what we recommend, and gives the Deep Report some context.
+ */
+export async function answerHit(kind: "check" | "deep", id: string, answer: string): Promise<{ ok: boolean }> {
+  if (!isHitAnswer(answer) || (kind !== "check" && kind !== "deep") || !/^[\w-]{6,40}$/.test(id)) return { ok: false };
+  if (kind === "check") {
+    const check = await getCheck(id);
+    if (!check) return { ok: false };
+    await recordHitAnswer({ kind, id, domain: check.domain, answer, source: "site" });
+    return { ok: true };
+  }
+  const report = isDeepId(id) ? await getDeepReport(id) : null;
+  if (!report || !(await canViewDeep(id, report))) return { ok: false };
+  await recordHitAnswer({ kind, id, domain: report.domain, answer, source: "site" });
+  return { ok: true };
 }

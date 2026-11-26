@@ -3,7 +3,7 @@ import { sendEmail, sendEmailDetailed } from "@/lib/brevo";
 import { deepReportEnabled } from "@/lib/deep/config";
 import { deepPricing, formatUsd, promoLastDay, tierFor, tierMaxPages } from "@/lib/pricing";
 import { site } from "@/lib/site";
-import { coverage, pagesWord } from "./coverage";
+import { coverage, pagesWord, quickHeadline } from "./coverage";
 import { SIGNAL_LABELS } from "./labels";
 import { unlockToken } from "./unlock";
 import type { StoredCheck } from "./run";
@@ -111,6 +111,28 @@ function rankBox(b: Benchmark | null, score: number): string {
 <p style="margin:0 0 16px;font-size:12px;${muted}">Safest &larr; your site (${score}/100) &rarr; Riskiest</p>`;
 }
 
+const flaggedCount = (check: StoredCheck) =>
+  check.analysis?.signals.filter((s) => s.level === "moderate" || s.level === "high").length ?? 0;
+
+/** The headline of a Quick Check email: the score when every page was checked, what the sample showed otherwise. */
+function headlineHtml(check: StoredCheck, benchmark: Benchmark | null, level: (lvl: string) => string): string {
+  const a = check.analysis!;
+  const c = coverage(check.pagesAnalyzed, check.metrics);
+  const head = quickHeadline(check.pagesAnalyzed, c, flaggedCount(check));
+  if (head.scoreIsVerdict) {
+    return `<p style="margin:0 0 14px;font-size:15px">Estimated spam risk: <strong style="font-size:20px">${a.riskScore}/100</strong> ${level(a.riskLevel)}</p>
+${rankBox(benchmark, a.riskScore)}${coverageBox(check)}`;
+  }
+  const share = c.share !== null ? ` (${c.share}% of your site)` : "";
+  return `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px;margin:0 0 20px">
+<p style="margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#b45309">Partial check · ${check.pagesAnalyzed}${c.total !== null ? ` of ${n(c.total)}` : ""} pages${share}</p>
+<p style="margin:0 0 6px;font-size:19px;font-weight:700;color:#1c1917">${escape(head.title)}</p>
+<p style="margin:0;font-size:14px;line-height:1.5;color:#78350f">${escape(head.detail)}</p>
+</div>
+<p style="margin:0 0 6px;font-size:14px;${muted}">Sample score: <strong style="color:#1c1917">${a.riskScore}/100</strong> ${level(a.riskLevel)}, from these ${check.pagesAnalyzed} ${pagesWord(check.pagesAnalyzed)} only. It isn't a verdict on your whole site.</p>
+${rankBox(benchmark, a.riskScore).replace("of the sites analysed on Spamlyze", "of the sites analysed on Spamlyze (sample score)")}`;
+}
+
 export function quickReportHtml(id: string, check: StoredCheck, now = Date.now(), benchmark: Benchmark | null = null): string {
   const a = check.analysis;
   const link = `${site.url}/report/${id}?u=${unlockToken(id)}`;
@@ -127,8 +149,7 @@ export function quickReportHtml(id: string, check: StoredCheck, now = Date.now()
 
   const body = !a
     ? `<p style="margin:0 0 12px;line-height:1.6;${muted}">Your robots.txt blocks crawlers from your homepage, so we couldn't analyze ${d}. Allow SpamlyzeBot and run the check again.</p>`
-    : `<p style="margin:0 0 14px;font-size:15px">Estimated spam risk: <strong style="font-size:20px">${a.riskScore}/100</strong> ${level(a.riskLevel)}</p>
-${rankBox(benchmark, a.riskScore)}${coverageBox(check)}
+    : `${headlineHtml(check, benchmark, level)}
 <p style="margin:0 0 24px;line-height:1.6">${escape(a.summary)}</p>
 <h2 style="margin:0 0 12px;font-size:18px">Top 3 things to fix</h2>
 ${a.topIssues
@@ -188,11 +209,19 @@ ${deepOffer(id, check, at, whole ? "See which pages are losing traffic" : "See w
   );
 }
 
+/** "…: 34/100" for a site checked in full, "…: 2 warning signs on 15 of 400 pages" otherwise. */
+export function quickSubject(check: StoredCheck): string {
+  const a = check.analysis!;
+  const c = coverage(check.pagesAnalyzed, check.metrics);
+  if (c.complete) return `Your detailed Quick Check for ${check.domain}: ${a.riskScore}/100`;
+  const f = flaggedCount(check);
+  const signs = f > 0 ? `${f} warning ${f === 1 ? "sign" : "signs"}` : "no major warning sign";
+  return `Your detailed Quick Check for ${check.domain}: ${signs} on ${check.pagesAnalyzed}${c.total !== null ? ` of ${n(c.total)}` : ""} pages`;
+}
+
 export async function sendQuickReport(to: string, id: string, check: StoredCheck) {
   const benchmark = check.analysis ? await benchmarkFor(check.analysis.riskScore, check.analysis.scoreVersion) : null;
-  const subject = check.analysis
-    ? `Your detailed Quick Check for ${check.domain}: ${check.analysis.riskScore}/100`
-    : `Your Quick Check for ${check.domain}`;
+  const subject = check.analysis ? quickSubject(check) : `Your Quick Check for ${check.domain}`;
   return sendEmail(to, subject, quickReportHtml(id, check, Date.now(), benchmark));
 }
 

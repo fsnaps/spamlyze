@@ -173,6 +173,8 @@ export type SiteSummaryInput = {
     /** Clicks per 28 days before and after the worst update, when Search Console is connected. */
     clicks?: { before: number; after: number };
   }[];
+  /** What the owner told us: "yes" means their traffic dropped after a spam update. */
+  ownerSaysHitBySpamUpdate?: "yes" | "no" | "unsure";
   /** Present when the site owner connected Search Console. */
   searchConsole?: {
     updates: { name: string; kind: string; clicksChange: string; verdict: string }[];
@@ -191,6 +193,7 @@ export function buildSummaryInput(
   sitemapPathSample: string[],
   searchConsole?: { gsc: GscData; losses: PageLoss[] },
   coverage?: SiteSummaryInput["coverage"],
+  hitAnswer?: SiteSummaryInput["ownerSaysHitBySpamUpdate"],
 ): SiteSummaryInput {
   const lossByKey = new Map((searchConsole?.losses ?? []).map((l) => [pageKey(l.url), l]));
   const qualityCounts: Record<string, number> = {};
@@ -266,6 +269,7 @@ export function buildSummaryInput(
       .slice(0, 20),
     flaggedPages,
     ...(sc ? { searchConsole: sc } : {}),
+    ...(hitAnswer ? { ownerSaysHitBySpamUpdate: hitAnswer } : {}),
   };
 }
 
@@ -284,6 +288,7 @@ Rules:
 - If coverage.pagesNotLoaded shows many pages we couldn't load, say how many and why in plain words, and don't draw site-wide conclusions from the pages we could read.
 - Only cite URLs and numbers from the input.
 - If searchConsole is present, it is the site's real Google traffic: say in the summary whether the site lost clicks after spam or core updates, and tie each finding to it when the pages that lost clicks show that signal (e.g. "12 of the 20 pages that lost the most clicks after the March 2024 spam update are thin"). A traffic drop on pages that look fine may come from something else (a core update, competition): say so instead of raising the risk.
+- If ownerSaysHitBySpamUpdate is "yes", the owner told us their traffic dropped after a spam update. It is context, not evidence: never raise a score because of it. If the data shows little spam risk, say so plainly in the summary and explain that the drop may come from pages we didn't review, or from a core update, a technical issue or competition rather than spam; if searchConsole is present, compare the drop with the update dates; if it is absent, recommend connecting Search Console to see which pages lost clicks and when.
 ${UNTRUSTED}`;
 
 const PLAN_SYSTEM = `You are Spamlyze, an SEO consultant. You get the results of a page-by-page review of up to 500 pages of a website, plus site-wide metrics. Write a prioritized action plan that reduces the site's exposure to Google's spam updates.
@@ -299,6 +304,7 @@ Rules:
 - If coverage.pagesNotLoaded shows many pages we couldn't load, say how many and why in plain words, and don't draw site-wide conclusions from the pages we could read.
 - Only cite URLs and numbers from the input. Plain English, short sentences.
 - If searchConsole is present, pages that both lost clicks after an update and were rated weak or spammy come first ("now"): list them in affectedUrls and quote their click loss in "why" (e.g. "lost 120 → 15 clicks per 28 days after the March 2024 spam update"). Flagged pages without a traffic loss come after.
+- If ownerSaysHitBySpamUpdate is "yes" and the review shows little spam risk, the first action is to find where the drop comes from: compare the drop dates with Google's update dates in Search Console (connect it if searchConsole is absent) and review the pages that lost the most clicks. Don't invent spam problems to explain the drop.
 ${UNTRUSTED}`;
 
 export async function synthesize(input: SiteSummaryInput, knownUrls: Set<string>): Promise<{ analysis: DeepAnalysis; usage: Usage }> {

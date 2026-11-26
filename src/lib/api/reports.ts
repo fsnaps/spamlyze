@@ -12,6 +12,7 @@ import type { DeepReport } from "@/lib/deep/types";
 import { db } from "@/lib/firebase-admin";
 import { notifyAdmin } from "@/lib/notify";
 import { site } from "@/lib/site";
+import { isHitAnswer, recordHitAnswer } from "@/lib/hit";
 import { track } from "@/lib/stats";
 import { API_PRICES } from "./config";
 import { chargeCredits, CreditError, refundCharge } from "./credits";
@@ -66,6 +67,7 @@ export async function serializeReport(id: string, r: DeepReport, withPages: bool
     maxPages: r.maxPages ?? MAX_PAGES,
     error: r.robotsBlocked ? "This site's robots.txt does not allow SpamlyzeBot." : r.status === "failed" ? s.error : null,
     refunded: Boolean(r.refunded),
+    hitBySpamUpdate: r.hitAnswer ?? null,
     reportUrl: `${site.url}/deep/${id}`,
     ...(done
       ? {
@@ -84,7 +86,11 @@ export async function serializeReport(id: string, r: DeepReport, withPages: bool
  * server drives to the end (Cloud Tasks). Returns at once with the id: poll GET /v1/reports/{id}.
  * A report that fails or is blocked by robots.txt is refunded automatically.
  */
-export async function createApiReport(ctx: ApiContext, body: { url?: unknown; maxPages?: unknown }): Promise<Response> {
+export async function createApiReport(
+  ctx: ApiContext,
+  body: { url?: unknown; maxPages?: unknown; hitBySpamUpdate?: unknown },
+): Promise<Response> {
+  const hit = isHitAnswer(body.hitBySpamUpdate) ? body.hitBySpamUpdate : undefined;
   if (!deepTasksEnabled()) {
     return apiError(503, "unavailable", "Deep Reports are temporarily unavailable through the API.");
   }
@@ -161,6 +167,7 @@ export async function createApiReport(ctx: ApiContext, body: { url?: unknown; ma
         createdAt: FieldValue.serverTimestamp(),
         paidAt: FieldValue.serverTimestamp(),
         failures: 0,
+        ...(hit ? { hitAnswer: hit } : {}),
       });
   } catch (err) {
     await refundCharge(ctx.accountId, chargeRef, "could not start");
@@ -170,6 +177,7 @@ export async function createApiReport(ctx: ApiContext, body: { url?: unknown; ma
   }
 
   await Promise.all([
+    hit ? recordHitAnswer({ kind: "deep", id, domain, answer: hit, source: "api", accountId: ctx.accountId }) : null,
     enqueueDeepStep(id, 0),
     track({ apiDeepReports: 1, apiChargedCents: price }),
     notifyAdmin("deep", `API Deep Report: ${domain}`, [`Account: ${ctx.account.name} (${ctx.accountId})`, `Pages: up to ${maxPages}`], `${site.url}/deep/${id}`),

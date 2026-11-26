@@ -16,6 +16,7 @@ import type { DeepPage, DeepReport } from "@/lib/deep/types";
 import { pageKey } from "@/lib/gsc/data";
 import { canViewDeep, maskEmail, privateModeAvailable } from "@/lib/deep/access";
 import { DeepPrivacyToggle, DeepPrivateGate } from "@/components/deep-privacy";
+import { HitQuestion } from "@/components/hit-question";
 
 export const metadata: Metadata = {
   title: "Deep Report",
@@ -143,11 +144,83 @@ async function DeepView({
         ) : (
           <>
             {report.status === "running" && <GscWhileRunning id={id} report={report} result={gscResult} />}
+            {report.status === "running" && (
+              <div className="mb-6">
+                <DeepHitQuestion id={id} report={report} />
+              </div>
+            )}
             <DeepRunner id={id} host={report.domain} initial={publicStatus(report)} />
           </>
         )}
       </div>
     </main>
+  );
+}
+
+/** "Did your traffic drop after a spam update?" The answer goes to the analysis as context, never into the score. */
+function DeepHitQuestion({ id, report, low }: { id: string; report: DeepReport; low?: boolean }) {
+  const connect = report.gsc ? null : (
+    <>
+      {" "}
+      <a href="#search-console" className="font-semibold text-foreground underline underline-offset-4">
+        Connect Search Console
+      </a>{" "}
+      so we can see which pages lost clicks and when.
+    </>
+  );
+  const done = report.status === "done";
+  return (
+    <HitQuestion
+      kind="deep"
+      id={id}
+      initial={report.hitAnswer}
+      replies={{
+        yes: done ? (
+          low ? (
+            <>
+              <span className="font-semibold text-foreground">This report found little spam risk, so the drop may have another cause:</span>{" "}
+              pages we didn&apos;t review, a core update, a technical issue or competition.
+              {connect ?? " Compare your drop with the update dates in the Search Console section below."}
+            </>
+          ) : (
+            <>Start with the action plan below: the pages it lists are the likeliest cause.{connect}</>
+          )
+        ) : (
+          <>Thanks, we&apos;ll take it into account in your report.{connect}</>
+        ),
+        unsure: <>Your Search Console can tell.{connect ?? " Your clicks around each Google update are in this report."}</>,
+        no: "Thanks, noted.",
+      }}
+    />
+  );
+}
+
+/** What the owner told us, next to the score: a drop after a spam update with a low score needs another explanation. */
+function HitContext({ report, score, reviewed }: { report: DeepReport; score: number; reviewed: number }) {
+  if (report.hitAnswer !== "yes") return null;
+  const gsc = report.gsc;
+  const low = score < 40;
+  return (
+    <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-amber-900 dark:text-amber-200">
+      <p className="font-semibold">
+        {low
+          ? "You told us your traffic dropped after a spam update, yet the spam risk here is low"
+          : "You told us your traffic dropped after a spam update"}
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-amber-900/80 dark:text-amber-200/80">
+        {gsc?.losers
+          ? `Your Search Console shows the biggest drop after the ${gsc.losers.update}: ${gsc.lostPages ?? 0} pages lost clicks. ${
+              low
+                ? "The pages we reviewed mostly look fine, which points to another cause: a core update, a technical issue or competition."
+                : "The action plan starts with them."
+            }`
+          : gsc
+            ? "Your Search Console shows no clear drop right after recent Google updates. Compare the date of your drop with the update timeline below: a drop that doesn't match a spam update usually has another cause (core update, technical issue, seasonality)."
+            : low
+              ? `We reviewed ${reviewed} pages and found little spam risk. The cause may sit in pages we didn't review, or come from a core update rather than spam. Connect Search Console below: we'll find the pages that lost clicks and when.`
+              : "Connect Search Console below so the plan starts with the pages that lost clicks."}
+      </p>
+    </div>
   );
 }
 
@@ -226,6 +299,12 @@ async function FinishedReport({ id, report, gscResult }: { id: string; report: D
         </div>
       </section>
 
+      <HitContext report={report} score={a.riskScore} reviewed={Math.max(pages.length, report.pagesAnalyzed ?? 0)} />
+      {!report.hitAnswer && (
+        <div className="mt-6">
+          <DeepHitQuestion id={id} report={report} low={a.riskScore < 40} />
+        </div>
+      )}
       {/* Right under the score: the action plan below gets much sharper with real traffic losses. */}
       {!report.gsc && gscEnabled() && <DeepGscPitch id={id} stage="done" result={gscResult} />}
       <section className="mt-12">

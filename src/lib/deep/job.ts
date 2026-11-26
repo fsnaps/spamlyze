@@ -471,6 +471,7 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
         pagesPlanned: r.urls?.length ?? all.length,
         pagesNotLoaded: r.crawlErrors ?? {},
       },
+      r.hitAnswer,
     );
     const { analysis, usage } = await synthesize(input, new Set(all.map((p) => p.url)));
     return {

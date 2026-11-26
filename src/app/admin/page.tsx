@@ -62,6 +62,23 @@ function GscBadge({ doc, connected }: { doc: FirebaseFirestore.QueryDocumentSnap
   );
 }
 
+const HIT: Record<string, [string, string]> = {
+  yes: ["hit", "bg-red-500/10 text-red-700 dark:text-red-300"],
+  no: ["not hit", "bg-stone-500/10 text-muted"],
+  unsure: ["hit?", AMBER],
+};
+
+/** The visitor's answer to "Did your traffic drop after a spam update?" (latest one on a shared Quick Check). */
+function HitBadge({ doc }: { doc: FirebaseFirestore.QueryDocumentSnapshot }) {
+  const h = HIT[doc.get("hitAnswer") as string];
+  if (!h) return null;
+  return (
+    <span title="Did your traffic drop after a spam update?" className={`mr-2 rounded-full px-2 py-0.5 text-xs font-semibold ${h[1]}`}>
+      {h[0]}
+    </span>
+  );
+}
+
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-5">
@@ -115,6 +132,11 @@ async function Dashboard() {
           label="Search Console connected"
           value={pct(listedGsc, listed)}
           hint={`${listedGsc} of the ${listed} reports below · 30 d: ${t.gscStarts} Connect clicks → ${t.gscConnected} imports, ${t.gscFailed} refused/failed`}
+        />
+        <Tile
+          label="Hit by a spam update?"
+          value={`${t.hitYes} yes`}
+          hint={`${t.hitNo} no · ${t.hitUnsure} not sure · ${pct(t.hitYes + t.hitNo + t.hitUnsure, t.quickChecks)} of Quick Checks answered`}
         />
         <Tile label="Monitoring / API interest" value={`${t.signupsMonitoring} / ${t.signupsApi}`} />
         <Tile
@@ -172,6 +194,7 @@ async function Dashboard() {
                   {c.get("domain")}
                 </a>
                 <span className="shrink-0 text-muted tabular-nums">
+                  <HitBadge doc={c} />
                   <GscBadge doc={c} connected={gscChecks.has(c.id)} />
                   {c.get("analysis.riskScore") ?? "–"}/100 · {c.get("createdAt")?.toDate().toISOString().slice(0, 10)}
                 </span>
@@ -189,6 +212,7 @@ async function Dashboard() {
                   {d.get("domain")}
                 </a>
                 <span className="shrink-0 text-muted">
+                  <HitBadge doc={d} />
                   <GscBadge doc={d} connected={d.get("gsc") != null} />
                   {d.get("test") ? "test · " : ""}
                   {d.get("status")}

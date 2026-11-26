@@ -107,8 +107,14 @@ r = await post("not json");
 assert.equal((await json(r)).error?.code, "invalid_body");
 assert.equal(await bal(), 100);
 
+// A bad hitBySpamUpdate: 400 before anything is charged.
+r = await post({ url: "garden.test", hitBySpamUpdate: "maybe" });
+assert.equal(r.status, 400);
+assert.equal((await json(r)).error?.code, "invalid_hit_by_spam_update");
+assert.equal(await bal(), 100);
+
 // A real check: 201, charged $0.15, stored as an API check.
-r = await post({ url: "https://garden.test/" });
+r = await post({ url: "https://garden.test/", hitBySpamUpdate: "yes" });
 assert.equal(r.status, 201);
 const first = await json(r);
 assert.equal(first.cached, false);
@@ -123,6 +129,8 @@ assert.equal(claudeCalls, 1);
 const stored = (await db().collection("checks").doc(first.id).get()).data()!;
 assert.equal(stored.source, "api");
 assert.equal(stored.accountId, acct);
+assert.equal(stored.hitAnswer, "yes");
+assert.equal((await db().collection("hitAnswers").where("refId", "==", first.id).get()).docs[0]?.get("answer"), "yes");
 
 // Same domain within 24 h: served from cache, still charged, no new Claude call.
 r = await post({ url: "garden.test" });

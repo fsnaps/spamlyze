@@ -17,6 +17,7 @@ import { LockedBadge, LockedLines, ReportEmailForm } from "@/components/report-e
 import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
 import { benchmarkFor } from "@/lib/check/benchmark";
 import { RiskRank } from "@/components/risk-rank";
+import { HitQuestion } from "@/components/hit-question";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -410,6 +411,41 @@ async function Report({
               </div>
             </section>
           )}
+          <div className="sl-fade-up mt-6 [animation-delay:150ms]">
+            <HitQuestion
+              kind="check"
+              id={id}
+              replies={{
+                yes: (
+                  <>
+                    <span className="font-semibold text-foreground">Then don&apos;t go by this score.</span>{" "}
+                    {head.scoreIsVerdict
+                      ? "This check saw your pages, not your traffic."
+                      : `This check saw ${sampled} ${pagesWord(sampled)}, and the pages that lost traffic may not be among them.`}{" "}
+                    The Deep Report connects your Search Console, finds the pages that lost clicks and when, and reviews them
+                    first.{" "}
+                    <a href="#deep-report" className="whitespace-nowrap font-semibold text-accent">
+                      Find the pages that lost traffic →
+                    </a>
+                  </>
+                ),
+                unsure: (
+                  <>
+                    Your Search Console can tell.{" "}
+                    <a href="#search-console" className="font-semibold text-foreground underline underline-offset-4">
+                      Connect it for free
+                    </a>{" "}
+                    (read-only) to see your clicks around each Google update, or let the{" "}
+                    <a href="#deep-report" className="font-semibold text-foreground underline underline-offset-4">
+                      Deep Report
+                    </a>{" "}
+                    do it for you.
+                  </>
+                ),
+                no: "Good. Google runs several spam updates a year: run a Quick Check again after the next one.",
+              }}
+            />
+          </div>
           <DeepNextStep
             sampled={sampled}
             c={c}

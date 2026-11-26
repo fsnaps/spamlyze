@@ -129,7 +129,7 @@ ${rankBox(benchmark, a.riskScore)}${coverageBox(check)}`;
 <p style="margin:0 0 6px;font-size:19px;font-weight:700;color:#1c1917">${escape(head.title)}</p>
 <p style="margin:0;font-size:14px;line-height:1.5;color:#78350f">${escape(head.detail)}</p>
 </div>
-<p style="margin:0 0 6px;font-size:14px;${muted}">Sample score: <strong style="color:#1c1917">${a.riskScore}/100</strong> ${level(a.riskLevel)}, from these ${check.pagesAnalyzed} ${pagesWord(check.pagesAnalyzed)} only. It isn't a verdict on your whole site.</p>
+<p style="margin:0 0 16px;font-size:14px;line-height:1.5;${muted}">Sample score: <strong style="color:#1c1917">${a.riskScore}/100</strong> ${level(a.riskLevel)}, from these ${check.pagesAnalyzed} ${pagesWord(check.pagesAnalyzed)} only. It isn't a verdict on your whole site.</p>
 ${rankBox(benchmark, a.riskScore).replace("of the sites analysed on Spamlyze", "of the sites analysed on Spamlyze (sample score)")}`;
 }
 

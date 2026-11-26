@@ -5,6 +5,7 @@ import { AnalysisError } from "@/lib/check/analyze";
 import { CrawlError } from "@/lib/check/crawl";
 import { cachedCheck } from "@/lib/check/guard";
 import { coverage, quickHeadline } from "@/lib/check/coverage";
+import { recordHitAnswer, type HitAnswer } from "@/lib/hit";
 import { domainOf, executeQuickCheck, getCheck, type StoredCheck } from "@/lib/check/run";
 import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
 import { db } from "@/lib/firebase-admin";
@@ -94,7 +95,7 @@ export function serializeCheck(id: string, c: StoredCheck, extra: Record<string,
  * POST /v1/checks. Charges the account, runs (or reuses, within 24 h) a quick check, and refunds
  * automatically when no analysis comes out of it.
  */
-export async function createApiCheck(ctx: ApiContext, rawUrl: unknown): Promise<Response> {
+export async function createApiCheck(ctx: ApiContext, rawUrl: unknown, hit?: HitAnswer): Promise<Response> {
   let url: URL;
   try {
     url = normalizeInputUrl(typeof rawUrl === "string" ? rawUrl : "");
@@ -150,17 +151,20 @@ export async function createApiCheck(ctx: ApiContext, rawUrl: unknown): Promise<
       );
     }
 
+    if (hit) await recordHitAnswer({ kind: "check", id: checkId, domain: check.domain, answer: hit, source: "api", accountId: ctx.accountId });
     await requests(ctx.accountId).doc(requestId).set({
       type: "quick_check",
       checkId,
       cached,
       cents: price,
       keyId: ctx.keyId,
+      ...(hit ? { hitBySpamUpdate: hit } : {}),
       createdAt: FieldValue.serverTimestamp(),
     });
     return Response.json(
       serializeCheck(checkId, check, {
         cached,
+        hitBySpamUpdate: hit ?? null,
         charged: { cents: price, currency: "usd" },
         balance: { cents: balanceCents, currency: "usd" },
       }),

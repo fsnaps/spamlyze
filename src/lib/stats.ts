@@ -33,6 +33,7 @@ export const STAT_KEYS = [
   "apiAuthFailures",
   "apiRateLimited",
   "apiCreditsPurchasedCents",
+  "apiMcpToolCalls",
   "hitYes",
   "hitNo",
   "hitUnsure",

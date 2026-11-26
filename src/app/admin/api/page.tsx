@@ -145,6 +145,7 @@ async function ApiDashboard() {
         <Tile label="Keys to look at" value={String(flagged.length)} warn={flagged.length > 0} hint="Many IPs, rate-limited, unused or idle" />
         <Tile label="Rejected keys" value={String(sum("apiAuthFailures"))} warn={sum("apiAuthFailures", days.slice(0, 1)) > 50} hint={`Calls with an invalid or revoked key · today ${sum("apiAuthFailures", days.slice(0, 1))}`} />
         <Tile label="Rate-limited calls" value={String(sum("apiRateLimited"))} hint={`today ${sum("apiRateLimited", days.slice(0, 1))}`} />
+        <Tile label="MCP tool calls" value={String(sum("apiMcpToolCalls"))} hint={`today ${sum("apiMcpToolCalls", days.slice(0, 1))} · billed like the API`} />
         <Tile
           label="Claude cost today (API)"
           value={usd(claudeToday / 10_000)}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { fillGaps, type GscData, type UpdateImpact } from "@/lib/gsc/data";
-import { UPDATES } from "@/lib/gsc/updates";
+import { getRankingUpdates } from "@/lib/gsc/update-feed";
+import { isSearchUpdate, statusOf, STATUS_DASHBOARD_URL, type RankingUpdate } from "@/lib/gsc/updates";
 
 export const GSC_MESSAGES: Record<string, string> = {
   connected: "Search Console connected. Your traffic is now lined up with Google's updates below.",
@@ -45,8 +46,9 @@ type Props = {
   quiet?: boolean;
 };
 
-export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, note, verdictOf, quiet }: Props) {
+export async function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, note, verdictOf, quiet }: Props) {
   if (!gsc && !enabled) return null;
+  const updates = await getRankingUpdates();
   const message = result ? GSC_MESSAGES[result] : null;
   return (
     <section id="search-console" className={`${quiet ? "mt-16 sm:mt-20" : "mt-12"} scroll-mt-8`}>
@@ -57,8 +59,9 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, n
           {message}
         </p>
       )}
+      <LiveUpdates updates={updates} />
       {gsc ? (
-        <GscResults gsc={gsc} connectHref={connectHref} enabled={enabled} upsell={upsell} verdictOf={verdictOf} />
+        <GscResults gsc={gsc} updates={updates} connectHref={connectHref} enabled={enabled} upsell={upsell} verdictOf={verdictOf} />
       ) : (
         <div className={`mt-6 rounded-2xl bg-surface ${quiet ? "border border-line p-5 text-sm sm:p-6" : "border-2 border-accent p-6"}`}>
           <p className="leading-relaxed">
@@ -94,7 +97,45 @@ export function GscSection({ connectHref, gsc, result, enabled, upsell, pitch, n
   );
 }
 
-function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props, "result" | "pitch" | "note"> & { gsc: GscData }) {
+/** What Google is rolling out right now, or has announced: a recent drop may not be finished. */
+function LiveUpdates({ updates }: { updates: RankingUpdate[] }) {
+  const live = updates.filter((u) => u.kind !== "other" && statusOf(u) !== "done");
+  if (!live.length) return null;
+  return (
+    <ul className="mt-4 space-y-2 text-sm">
+      {live.map((u) => (
+        <li key={u.name} className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-900 dark:text-amber-200">
+          <span aria-hidden className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+          <span>
+            {statusOf(u) === "rolling" ? (
+              <>
+                <strong>The {u.name} is rolling out now</strong> (since {fmtDay(u.start)}). Rankings can swing until Google says
+                it&apos;s finished, so a drop during the rollout isn&apos;t a verdict yet.
+              </>
+            ) : (
+              <>
+                <strong>Google has announced the {u.name}.</strong> It hasn&apos;t started yet: we&apos;ll mark it on this chart
+                when it does.
+              </>
+            )}{" "}
+            <a href={STATUS_DASHBOARD_URL} target="_blank" rel="noopener" className="underline">
+              Google&apos;s status page
+            </a>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function GscResults({
+  gsc,
+  updates,
+  connectHref,
+  enabled,
+  upsell,
+  verdictOf,
+}: Omit<Props, "result" | "pitch" | "note"> & { gsc: GscData; updates: RankingUpdate[] }) {
   const hits = gsc.updates.filter((u) => u.verdict === "hit" || u.verdict === "possible");
   return (
     <>
@@ -106,7 +147,7 @@ function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props
             : "Not enough Search Console history to measure an update yet."}{" "}
         Property: <span className="font-mono text-sm">{gsc.property}</span>
       </p>
-      <TrafficChart daily={gsc.daily} />
+      <TrafficChart daily={gsc.daily} updates={updates} />
       {gsc.updates.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-2xl border border-line bg-surface">
           <table className="w-full text-sm">
@@ -127,6 +168,9 @@ function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props
                     <span className="block text-xs text-muted">
                       {fmtDay(u.start)} – {u.end ? fmtDay(u.end) : "ongoing"}
                     </span>
+                    {u.overlapsWith && u.overlapsWith.length > 0 && (
+                      <span className="block text-xs text-muted">Close to the {u.overlapsWith.join(" and the ")}</span>
+                    )}
                   </td>
                   <td className="p-3 text-right tabular-nums">{Math.round(u.beforeClicks)}</td>
                   <td className="p-3 text-right tabular-nums">{Math.round(u.afterClicks)}</td>
@@ -192,41 +236,72 @@ function GscResults({ gsc, connectHref, enabled, upsell, verdictOf }: Omit<Props
   );
 }
 
-/** Daily clicks as a line, with spam updates shaded red and core updates grey. */
-function TrafficChart({ daily: raw }: { daily: GscData["daily"] }) {
+/** Daily clicks as a line, with spam updates shaded red and core updates grey (hatched while rolling out). */
+function TrafficChart({ daily: raw, updates }: { daily: GscData["daily"]; updates: RankingUpdate[] }) {
   const daily = fillGaps(raw);
   if (daily.length < 2) return null;
   const W = 800;
-  const H = 220;
-  const pad = { l: 44, r: 8, t: 10, b: 24 };
+  const H = 236;
+  const pad = { l: 44, r: 8, t: 26, b: 24 };
+  const lastDay = daily[daily.length - 1].d;
   const t0 = Date.parse(`${daily[0].d}T00:00:00Z`);
-  const t1 = Date.parse(`${daily[daily.length - 1].d}T00:00:00Z`);
+  const t1 = Date.parse(`${lastDay}T00:00:00Z`);
   const max = Math.max(1, ...daily.map((p) => p.c));
-  const x = (d: string) => pad.l + ((Date.parse(`${d}T00:00:00Z`) - t0) / (t1 - t0)) * (W - pad.l - pad.r);
+  const xt = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (W - pad.l - pad.r);
+  const x = (d: string) => xt(Date.parse(`${d}T00:00:00Z`));
   const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
   const path = daily.map((p, i) => `${i ? "L" : "M"}${x(p.d).toFixed(1)},${y(p.c).toFixed(1)}`).join("");
-  const bands = UPDATES.filter((u) => u.kind !== "other")
+  const placed = updates
+    .filter(isSearchUpdate)
     .map((u) => {
+      const rolling = statusOf(u) === "rolling";
       const s = Math.max(Date.parse(`${u.start}T00:00:00Z`), t0);
-      const e = Math.min(Date.parse(`${u.end ?? daily[daily.length - 1].d}T00:00:00Z`), t1);
-      return e >= s ? { ...u, x1: x(new Date(s).toISOString().slice(0, 10)), x2: x(new Date(e).toISOString().slice(0, 10)) } : null;
+      const e = Math.min(Date.parse(`${u.end ?? lastDay}T00:00:00Z`), t1);
+      return e >= s ? { ...u, rolling, x1: xt(s), x2: xt(e) } : null;
     })
-    .filter((b) => b !== null);
+    .filter((b) => b !== null)
+    .sort((a, b) => a.x1 - b.x1);
+  // Short label over each band, skipped when it would collide with the previous label.
+  const bands = placed.reduce<((typeof placed)[number] & { showLabel: boolean })[]>((acc, b) => {
+    const prev = acc.findLast((a) => a.showLabel);
+    return [...acc, { ...b, showLabel: !prev || b.x1 - prev.x1 >= 34 }];
+  }, []);
+  const anyRolling = bands.some((b) => b.rolling);
   const months = daily.filter((p) => p.d.endsWith("-01"));
   return (
     <figure className="mt-6 rounded-2xl border border-line bg-surface p-4">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Daily clicks from Google Search">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Daily clicks from Google Search, with Google's spam and core updates">
+        <defs>
+          <pattern id="rolling-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" className="stroke-amber-500/40" strokeWidth={3} />
+          </pattern>
+        </defs>
         {bands.map((b) => (
-          <rect
-            key={b.name}
-            x={b.x1}
-            y={pad.t}
-            width={Math.max(2, b.x2 - b.x1)}
-            height={H - pad.t - pad.b}
-            className={b.kind === "spam" ? "fill-red-500/15" : "fill-stone-500/15"}
-          >
-            <title>{b.name}</title>
-          </rect>
+          <g key={b.name}>
+            <rect
+              x={b.x1}
+              y={pad.t}
+              width={Math.max(2, b.x2 - b.x1)}
+              height={H - pad.t - pad.b}
+              className={b.kind === "spam" ? "fill-red-500/15" : "fill-stone-500/15"}
+            >
+              <title>{`${b.name} (${fmtDay(b.start)} – ${b.end ? fmtDay(b.end) : "rolling out"})`}</title>
+            </rect>
+            {b.rolling && (
+              <rect x={b.x1} y={pad.t} width={Math.max(2, b.x2 - b.x1)} height={H - pad.t - pad.b} fill="url(#rolling-hatch)">
+                <title>{`${b.name}: still rolling out`}</title>
+              </rect>
+            )}
+            {b.showLabel && (
+              <text
+                x={b.x1 + 1}
+                y={pad.t - 8}
+                className={`text-[10px] font-semibold ${b.kind === "spam" ? "fill-red-600 dark:fill-red-400" : "fill-stone-500"}`}
+              >
+                {b.kind === "spam" ? "Spam" : "Core"}
+              </text>
+            )}
+          </g>
         ))}
         {(max >= 2 ? [0, Math.round(max / 2), max] : [0, max]).map((v) => (
           <g key={v}>
@@ -250,6 +325,18 @@ function TrafficChart({ daily: raw }: { daily: GscData["daily"] }) {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded-sm bg-stone-500/30" /> Core update
+        </span>
+        {anyRolling && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-sm bg-[repeating-linear-gradient(45deg,rgb(245_158_11/0.45)_0_2px,transparent_2px_5px)]" /> Still
+            rolling out
+          </span>
+        )}
+        <span>
+          Dates from{" "}
+          <a href={STATUS_DASHBOARD_URL} target="_blank" rel="noopener" className="underline">
+            Google&apos;s Search Status Dashboard
+          </a>
         </span>
       </figcaption>
     </figure>

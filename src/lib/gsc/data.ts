@@ -1,5 +1,5 @@
 import "server-only";
-import { UPDATES, type RankingUpdate } from "./updates";
+import { isSearchUpdate, overlapping, statusOf, type RankingUpdate } from "./updates";
 
 const API = "https://searchconsole.googleapis.com/webmasters/v3";
 const WINDOW_DAYS = 28;
@@ -12,6 +12,8 @@ export type UpdateImpact = RankingUpdate & {
   clicksChange: number;
   impressionsChange: number;
   verdict: "hit" | "possible" | "stable" | "gain";
+  /** Other updates rolling out around the same time: a drop can't be pinned on this one alone. */
+  overlapsWith?: string[];
 };
 export type PageLoss = { url: string; before: number; after: number };
 export type GscData = {
@@ -124,10 +126,16 @@ function verdictFor(clicksChange: number, beforeClicks: number, afterClicks: num
 const MAX_LOSSES = 150;
 
 /**
- * Imports 16 months of daily clicks/impressions and measures each known update.
- * `losses` is the longer list of pages that lost clicks around the worst update.
+ * Imports 16 months of daily clicks/impressions and measures each finished spam or core update
+ * (`known` = getRankingUpdates()). One still rolling out isn't measured: its "after" would
+ * start in the middle of the rollout. `losses` is the longer list of pages that lost clicks
+ * around the worst update.
  */
-export async function importSearchData(token: string, property: string): Promise<{ data: GscData; losses: PageLoss[] }> {
+export async function importSearchData(
+  token: string,
+  property: string,
+  known: RankingUpdate[],
+): Promise<{ data: GscData; losses: PageLoss[] }> {
   const endDate = Date.now() - 3 * DAY;
   const startDate = endDate - 485 * DAY;
   const rows = await query(token, property, {
@@ -144,7 +152,7 @@ export async function importSearchData(token: string, property: string): Promise
   const last = daily.length ? day(daily[daily.length - 1].d) : endDate;
 
   const updates: UpdateImpact[] = [];
-  for (const u of UPDATES) {
+  for (const u of known.filter((k) => isSearchUpdate(k) && statusOf(k) === "done")) {
     const w = windows(u, last);
     if (w.before.from < first || !w.enoughAfter) continue;
     const beforeClicks = avg(daily, w.before.from, w.before.to, "c");
@@ -157,6 +165,7 @@ export async function importSearchData(token: string, property: string): Promise
       clicksChange,
       impressionsChange: change(avg(daily, w.before.from, w.before.to, "i"), avg(daily, w.after.from, w.after.to, "i")),
       verdict: verdictFor(clicksChange, beforeClicks, afterClicks),
+      overlapsWith: overlapping(u, known),
     });
   }
 

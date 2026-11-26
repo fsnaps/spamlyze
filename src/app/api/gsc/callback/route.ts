@@ -6,6 +6,7 @@ import { getCheck } from "@/lib/check/run";
 import { attachSearchConsole, getDeepReport } from "@/lib/deep/job";
 import { noteGsc } from "@/lib/gsc/activity";
 import { findProperty, GscError, importSearchData } from "@/lib/gsc/data";
+import { getRankingUpdates } from "@/lib/gsc/update-feed";
 import { exchangeCode, GSC_SCOPE, NONCE_COOKIE, readState, revoke } from "@/lib/gsc/oauth";
 import { site } from "@/lib/site";
 import { track } from "@/lib/stats";
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     token = t.accessToken;
     if (!t.scope.split(" ").includes(GSC_SCOPE)) return back("denied");
     const property = await findProperty(token, domain);
-    const { data: gsc, losses } = await importSearchData(token, property);
+    const { data: gsc, losses } = await importSearchData(token, property, await getRankingUpdates());
     await track({ gscConnected: 1 });
     if (kind === "d") {
       // The job crawls and reviews the pages that lost clicks first, and ties the action plan to them.

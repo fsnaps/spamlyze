@@ -6,6 +6,7 @@ import { CrawlError, botChallengeMessage, discoverSite, fetchPage, mapLimit, spr
 import { FetchBlockedError } from "@/lib/check/safe-fetch";
 import { computeMetrics } from "@/lib/check/metrics";
 import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
+import { getRankingUpdates } from "@/lib/gsc/update-feed";
 import { stripe } from "@/lib/stripe";
 import { buildSummaryInput, DEEP_MODEL, judgePages, synthesize, type PageVerdict } from "./analyze";
 import { sendDeepReady, sendDeepStarted } from "./emails";
@@ -474,6 +475,7 @@ const PHASES: Record<DeepReport["phase"], (id: string, r: DeepReport) => Promise
         pagesNotLoaded: r.crawlErrors ?? {},
       },
       r.hitAnswer,
+      await getRankingUpdates(),
     );
     const { analysis, usage } = await synthesize(input, new Set(all.map((p) => p.url)));
     if (r.accountId) await recordApiClaudeCost(r.accountId, DEEP_MODEL(), usage, id);

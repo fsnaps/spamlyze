@@ -5,6 +5,7 @@ import type { Timestamp } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin";
 import { accounts, type ApiAccount } from "@/lib/api/accounts";
 import { apiEnabled } from "@/lib/api/config";
+import { apiClaudeBudgetMicros, apiClaudeSpentToday } from "@/lib/api/costs";
 import { ipFromField, type ApiKeyDoc } from "@/lib/api/keys";
 import { lastDays, today, type DayStats } from "@/lib/stats";
 import { addCreditsAction, revokeKeyAction, setAccountStatusAction } from "./actions";
@@ -61,6 +62,11 @@ function Badge({ tone, children, title }: { tone: keyof typeof BADGE; children: 
   );
 }
 
+/** The UTC day `n` days ago, as YYYY-MM-DD. */
+function dayAgo(n: number) {
+  return new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
+}
+
 type Key = ApiKeyDoc & { keyId: string };
 
 /** Security flags for one key, worst first. */
@@ -91,6 +97,27 @@ async function ApiDashboard() {
     ? []
     : await db().getAll(...acctSnap.docs.map((a) => a.ref.collection("usage").doc(day)));
   const spentToday = new Map(usageSnaps.map((u) => [u.ref.parent.parent!.id, (u.get("spentCents") as number) ?? 0]));
+  // Last 30 days per account: what we billed vs what Claude cost us.
+  const since = dayAgo(30);
+  const [month, claudeToday] = await Promise.all([
+    Promise.all(
+      acctSnap.docs.map(async (a) => {
+        const u = await a.ref.collection("usage").where("day", ">=", since).get();
+        let billed = 0;
+        let cost = 0;
+        for (const d of u.docs) {
+          billed += (d.get("spentCents") as number) ?? 0;
+          cost += (d.get("claudeCostMicros") as number) ?? 0;
+        }
+        return [a.id, { billed, costCents: cost / 10_000 }] as const;
+      }),
+    ),
+    apiClaudeSpentToday(),
+  ]);
+  const margin30 = new Map(month);
+  const budget = apiClaudeBudgetMicros();
+  const totalBilled = month.reduce((x, [, m]) => x + m.billed, 0);
+  const totalCost = month.reduce((x, [, m]) => x + m.costCents, 0);
 
   const sum = (k: keyof DayStats, list = days) => list.reduce((s, d) => s + ((d[k] as number) ?? 0), 0);
   const keys: Key[] = keySnap.docs.map((d) => ({ keyId: d.id, ...(d.data() as ApiKeyDoc) }));
@@ -118,6 +145,18 @@ async function ApiDashboard() {
         <Tile label="Keys to look at" value={String(flagged.length)} warn={flagged.length > 0} hint="Many IPs, rate-limited, unused or idle" />
         <Tile label="Rejected keys" value={String(sum("apiAuthFailures"))} warn={sum("apiAuthFailures", days.slice(0, 1)) > 50} hint={`Calls with an invalid or revoked key · today ${sum("apiAuthFailures", days.slice(0, 1))}`} />
         <Tile label="Rate-limited calls" value={String(sum("apiRateLimited"))} hint={`today ${sum("apiRateLimited", days.slice(0, 1))}`} />
+        <Tile
+          label="Claude cost today (API)"
+          value={usd(claudeToday / 10_000)}
+          warn={claudeToday >= budget * 0.8}
+          hint={`Daily budget ${usd(budget / 10_000)}: new paid calls pause at 100%`}
+        />
+        <Tile
+          label="API margin (30 d)"
+          value={usd(totalBilled - totalCost)}
+          warn={totalBilled > 0 && totalCost > totalBilled * 0.5}
+          hint={`${usd(totalBilled)} billed · ${usd(totalCost)} Claude${totalBilled ? ` · ${Math.round((1 - totalCost / totalBilled) * 100)}% margin` : ""}`}
+        />
       </div>
 
       <h2 className="mt-12 text-xl font-semibold">Accounts</h2>
@@ -125,7 +164,7 @@ async function ApiDashboard() {
         <table className="w-full text-sm tabular-nums">
           <thead className="text-left text-muted">
             <tr>
-              {["Account", "Balance", "Today / cap", "Keys", "Last used", "Actions"].map((h) => (
+              {["Account", "Balance", "Today / cap", "30 d billed / Claude", "Keys", "Last used", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-2 font-medium">{h}</th>
               ))}
             </tr>
@@ -150,6 +189,17 @@ async function ApiDashboard() {
                     {usd(spent)} / {usd(a.dailySpendCapCents ?? 0)}
                     {spent >= (a.dailySpendCapCents ?? 0) * 0.8 && spent > 0 && <Badge tone="amber">near cap</Badge>}
                   </td>
+                  <td className="px-4 py-2">
+                    {(() => {
+                      const m = margin30.get(a.id) ?? { billed: 0, costCents: 0 };
+                      return (
+                        <>
+                          {usd(m.billed)} / {usd(m.costCents)}
+                          {m.billed > 0 && m.costCents > m.billed * 0.5 && <Badge tone="amber">low margin</Badge>}
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-2">{ks.filter((k) => !k.revokedAt).length} active</td>
                   <td className="px-4 py-2">{ago(last)}</td>
                   <td className="px-4 py-2">
@@ -170,7 +220,7 @@ async function ApiDashboard() {
             })}
             {!accts.length && (
               <tr>
-                <td className="px-4 py-6 text-muted" colSpan={6}>
+                <td className="px-4 py-6 text-muted" colSpan={7}>
                   No API account yet. Create one with <code>npm run api -- create-account</code>.
                 </td>
               </tr>

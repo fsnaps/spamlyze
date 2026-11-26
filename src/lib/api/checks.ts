@@ -1,4 +1,5 @@
 import "server-only";
+import { budgetExhausted, withinApiBudget } from "./costs";
 import { randomBytes } from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AnalysisError } from "@/lib/check/analyze";
@@ -103,6 +104,7 @@ export async function createApiCheck(ctx: ApiContext, rawUrl: unknown, hit?: Hit
     return apiError(400, "invalid_url", err instanceof Error ? err.message : "Invalid URL.");
   }
 
+  if (!(await withinApiBudget())) return budgetExhausted();
   const requestId = `qc_${randomBytes(12).toString("base64url")}`;
   if (!(await takeSlot(ctx.accountId, requestId))) {
     return apiError(429, "too_many_concurrent", `At most ${MAX_CONCURRENT()} Quick Checks can run at the same time per account.`, {

@@ -1,4 +1,5 @@
 import "server-only";
+import { budgetExhausted, withinApiBudget } from "./costs";
 import { randomBytes } from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { recordCheckoutBlock } from "@/lib/deep/blocks";
@@ -105,6 +106,7 @@ export async function createApiReport(
     return apiError(400, "invalid_max_pages", `maxPages must be a whole number from 10 to ${MAX_PAGES}.`);
   }
 
+  if (!(await withinApiBudget())) return budgetExhausted();
   // Capacity before money: nothing is charged for a request we can't run now.
   if ((await runningCount(ctx.accountId)) >= MAX_RUNNING_PER_ACCOUNT()) {
     return apiError(429, "too_many_running", `At most ${MAX_RUNNING_PER_ACCOUNT()} Deep Reports can run at the same time per account.`, {

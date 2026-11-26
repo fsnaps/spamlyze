@@ -1,4 +1,5 @@
 import "server-only";
+import { recordApiClaudeCost } from "@/lib/api/costs";
 import { randomBytes } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin";
@@ -68,6 +69,7 @@ export async function executeQuickCheck(url: URL, api?: { accountId: string }): 
 
   const opus = ai?.model.includes("opus");
   await Promise.all([
+    api && ai ? recordApiClaudeCost(api.accountId, ai.model, ai.usage) : null,
     ai ? recordRiskScore(domain, ai.analysis.riskScore) : null,
     track({
       [api ? "apiQuickChecks" : "quickChecks"]: 1,

@@ -202,5 +202,39 @@ r = await post({ url: "slow.test" });
 assert.equal(r.status, 201);
 delete process.env.API_MAX_CONCURRENT_CHECKS;
 
+// Claude cost is recorded per account and day, and globally (Haiku: 9000 in, 2500 out per call).
+const day = new Date().toISOString().slice(0, 10);
+const { costMicros, apiClaudeSpentToday } = await import("../src/lib/api/costs");
+const perCall = costMicros("claude-haiku-5-5", { input: 9000, output: 2500 });
+assert.equal(perCall, 9000 * 0.1 + 2500 * 0.5, "micro-dollars");
+const usageDoc = (await accounts().doc(acct).collection("usage").doc(day).get()).data()!;
+assert.ok(usageDoc.claudeCostMicros >= perCall, "per-account cost recorded");
+assert.equal(usageDoc.claudeCostMicros % perCall, 0, "only real Claude calls are counted (cache hits cost nothing)");
+const globalSpent = await apiClaudeSpentToday();
+assert.equal(globalSpent, usageDoc.claudeCostMicros, "global = sum of accounts (one account here)");
+
+// The daily budget: once spent, new paid calls get 503 and nothing is charged.
+await addCredits(acct, 100, "manual", "t-budget");
+process.env.API_DAILY_CLAUDE_BUDGET_USD = String((globalSpent - 1) / 1_000_000);
+const balBefore = await bal();
+const callsBefore = claudeCalls;
+r = await post({ url: "budget.test" });
+assert.equal(r.status, 503);
+assert.equal((await json(r)).error?.code, "budget_exhausted");
+assert.ok(Number(r.headers.get("retry-after")) > 0 && Number(r.headers.get("retry-after")) <= 86_400);
+assert.equal(await bal(), balBefore, "not charged");
+assert.equal(claudeCalls, callsBefore, "no Claude call");
+delete process.env.API_DAILY_CLAUDE_BUDGET_USD;
+r = await post({ url: "budget.test" });
+assert.equal(r.status, 201, "back to normal with the default budget");
+
+// Alerts: one admin email at 80% and at 100%, once per day.
+const { recordApiClaudeCost } = await import("../src/lib/api/costs");
+process.env.API_DAILY_CLAUDE_BUDGET_USD = String((await apiClaudeSpentToday()) / 1_000_000);
+await recordApiClaudeCost(acct, "claude-haiku-5-5", { input: 10, output: 0 });
+await recordApiClaudeCost(acct, "claude-haiku-5-5", { input: 10, output: 0 });
+assert.ok((await db().collection("apiCost").doc(`${day}_alert100`).get()).exists, "100% alert recorded");
+delete process.env.API_DAILY_CLAUDE_BUDGET_USD;
+
 console.log("api checks tests passed");
 process.exit(0);

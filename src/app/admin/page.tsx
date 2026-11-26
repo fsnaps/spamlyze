@@ -26,6 +26,9 @@ export default function AdminPage() {
           <a href="/admin/checkouts" className="text-accent underline">
             Checkouts →
           </a>
+          <a href="/admin/updates" className="text-accent underline">
+            Google updates →
+          </a>
           <a href="/admin/api" className="text-accent underline">
             API accounts & keys →
           </a>

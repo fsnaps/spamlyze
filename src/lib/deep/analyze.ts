@@ -7,6 +7,7 @@ import { levelFor, normalizeSignal, overallScore, RUBRIC, SCORE_VERSION } from "
 import type { PageData } from "@/lib/check/crawl";
 import type { Metrics } from "@/lib/check/metrics";
 import { pageKey, type GscData, type PageLoss } from "@/lib/gsc/data";
+import { statusOf, type RankingUpdate } from "@/lib/gsc/updates";
 import { track } from "@/lib/stats";
 
 export const DEEP_MODEL = () => process.env.DEEP_REPORT_MODEL || "claude-opus-5-5";
@@ -175,15 +176,28 @@ export type SiteSummaryInput = {
   }[];
   /** What the owner told us: "yes" means their traffic dropped after a spam update. */
   ownerSaysHitBySpamUpdate?: "yes" | "no" | "unsure";
+  /**
+   * Google's official spam and core updates of the last 16 months (Search Status Dashboard),
+   * newest first. "rolling" = not finished yet, "announced" = not started yet.
+   */
+  googleUpdates?: { name: string; kind: string; start: string; end: string | null; status: string }[];
   /** Present when the site owner connected Search Console. */
   searchConsole?: {
-    updates: { name: string; kind: string; clicksChange: string; verdict: string }[];
+    updates: { name: string; kind: string; clicksChange: string; verdict: string; overlapsWith?: string[] }[];
     worstUpdate: string | null;
     pagesThatLostClicks: number;
     /** Losing pages we reviewed, biggest losses first, with our verdict. */
     losingPages: { url: string; before: number; after: number; quality: string; signals: string[]; note: string }[];
   };
 };
+
+/** Spam and core updates of the last 16 months, as the model sees them. */
+function recentUpdates(all: RankingUpdate[]): NonNullable<SiteSummaryInput["googleUpdates"]> {
+  const since = new Date(Date.now() - 490 * 86_400_000).toISOString().slice(0, 10);
+  return all
+    .filter((u) => u.kind !== "other" && (u.end ?? "9999") >= since)
+    .map((u) => ({ name: u.name, kind: u.kind, start: u.start, end: u.end, status: statusOf(u) }));
+}
 
 export function buildSummaryInput(
   site: string,
@@ -194,6 +208,7 @@ export function buildSummaryInput(
   searchConsole?: { gsc: GscData; losses: PageLoss[] },
   coverage?: SiteSummaryInput["coverage"],
   hitAnswer?: SiteSummaryInput["ownerSaysHitBySpamUpdate"],
+  googleUpdates?: RankingUpdate[],
 ): SiteSummaryInput {
   const lossByKey = new Map((searchConsole?.losses ?? []).map((l) => [pageKey(l.url), l]));
   const qualityCounts: Record<string, number> = {};
@@ -248,6 +263,7 @@ export function buildSummaryInput(
         kind: u.kind,
         clicksChange: `${Math.round(u.clicksChange * 100)}%`,
         verdict: u.verdict,
+        ...(u.overlapsWith?.length ? { overlapsWith: u.overlapsWith } : {}),
       })),
       worstUpdate: gsc.losers?.update ?? null,
       pagesThatLostClicks: gsc.lostPages ?? 0,
@@ -268,6 +284,7 @@ export function buildSummaryInput(
       .sort((a, b) => b.weakOrSpammy - a.weakOrSpammy || b.pages - a.pages)
       .slice(0, 20),
     flaggedPages,
+    ...(googleUpdates?.length ? { googleUpdates: recentUpdates(googleUpdates) } : {}),
     ...(sc ? { searchConsole: sc } : {}),
     ...(hitAnswer ? { ownerSaysHitBySpamUpdate: hitAnswer } : {}),
   };
@@ -288,6 +305,7 @@ Rules:
 - If coverage.pagesNotLoaded shows many pages we couldn't load, say how many and why in plain words, and don't draw site-wide conclusions from the pages we could read.
 - Only cite URLs and numbers from the input.
 - If searchConsole is present, it is the site's real Google traffic: say in the summary whether the site lost clicks after spam or core updates, and tie each finding to it when the pages that lost clicks show that signal (e.g. "12 of the 20 pages that lost the most clicks after the March 2024 spam update are thin"). A traffic drop on pages that look fine may come from something else (a core update, competition): say so instead of raising the risk.
+- googleUpdates are Google's official update dates. A drop that lines up with a spam update (and not a core update) points to a spam policy problem. A drop that lines up with a core update points to how Google judges overall quality and relevance, not to a spam violation: say so and don't raise spam scores for it. When searchConsole.updates lists overlapsWith, the updates rolled out too close together to tell which one caused the change: say it's ambiguous. If an update has status "rolling", it isn't finished: a recent drop may still move, say so. Never invent update names or dates that aren't in googleUpdates.
 - If ownerSaysHitBySpamUpdate is "yes", the owner told us their traffic dropped after a spam update. It is context, not evidence: never raise a score because of it. If the data shows little spam risk, say so plainly in the summary and explain that the drop may come from pages we didn't review, or from a core update, a technical issue or competition rather than spam; if searchConsole is present, compare the drop with the update dates; if it is absent, recommend connecting Search Console to see which pages lost clicks and when.
 ${UNTRUSTED}`;
 
@@ -304,6 +322,7 @@ Rules:
 - If coverage.pagesNotLoaded shows many pages we couldn't load, say how many and why in plain words, and don't draw site-wide conclusions from the pages we could read.
 - Only cite URLs and numbers from the input. Plain English, short sentences.
 - If searchConsole is present, pages that both lost clicks after an update and were rated weak or spammy come first ("now"): list them in affectedUrls and quote their click loss in "why" (e.g. "lost 120 → 15 clicks per 28 days after the March 2024 spam update"). Flagged pages without a traffic loss come after.
+- Use googleUpdates for dates: if the clicks lost line up with a core update rather than a spam update, the plan targets overall quality and usefulness, not spam clean-up. If an update is still "rolling", advise waiting until Google says it's finished before big changes made only because of a recent drop.
 - If ownerSaysHitBySpamUpdate is "yes" and the review shows little spam risk, the first action is to find where the drop comes from: compare the drop dates with Google's update dates in Search Console (connect it if searchConsole is absent) and review the pages that lost the most clicks. Don't invent spam problems to explain the drop.
 ${UNTRUSTED}`;
 

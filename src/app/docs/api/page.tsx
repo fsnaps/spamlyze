@@ -271,8 +271,13 @@ def verify(raw_body: bytes, header: str, secret: str) -> bool:
       <P>
         Every Deep Report comes with <C>searchConsole.connectUrl</C>. Send that link to the site owner: they sign in with the Google
         account that manages the site and allow read-only access. We import the data once, then revoke the access and keep no token.
-        You never handle their Google credentials.
+        You never handle their Google credentials. Because we keep no access, the owner connects again for each new Deep Report
+        (it takes a minute).
       </P>
+      <p className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm leading-6 text-muted">
+        <strong className="text-foreground">Coming with the Monitoring plan:</strong> a lasting Search Console connection per site,
+        which the owner can revoke at any time, so recurring reports and alerts use fresh traffic data without a new link each time.
+      </p>
       <ul className="mt-4 list-disc space-y-2 pl-5 leading-7 text-muted">
         <li>
           <strong className="text-foreground">Wait for Search Console (recommended)</strong>: send{" "}

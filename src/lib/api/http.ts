@@ -42,7 +42,7 @@ export async function authenticate(request: Request): Promise<ApiContext | Respo
     const account = await getApiAccount(found.data.accountId);
     if (!account) return apiError(401, "invalid_api_key", "This API key is invalid or has been revoked.");
     if (!apiEnabled() && !account.beta) {
-      return apiError(503, "api_not_open", "The Spamlyze API opens on December 1, 2026.");
+      return apiError(503, "api_not_open", "The Spamlyze API is not open to new accounts yet.");
     }
     if (account.status !== "active") {
       return apiError(403, "account_suspended", "This account is suspended. Contact hello@spamlyze.com.");

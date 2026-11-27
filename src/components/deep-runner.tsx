@@ -30,7 +30,7 @@ function progressOf(s: DeepStatusView): number {
 }
 
 /** Drives the report job one step at a time and shows live progress. */
-export function DeepRunner({ id, host, initial }: { id: string; host: string; initial: DeepStatusView }) {
+export function DeepRunner({ id, host, initial, serverDriven = false }: { id: string; host: string; initial: DeepStatusView; serverDriven?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState(initial);
   const stopped = useRef(false);
@@ -131,8 +131,10 @@ export function DeepRunner({ id, host, initial }: { id: string; host: string; in
         </p>
       </div>
       <p className="mt-6 text-sm text-muted">
-        This takes 5 to 15 minutes. Keep this tab open: the analysis runs while you&apos;re here, and resumes if you
-        come back to this link later. Bookmark it to find your report again.
+        {serverDriven
+          ? "This takes 5 to 30 minutes and runs on our servers: you can close this page."
+          : <>This takes 5 to 15 minutes. Keep this tab open: the analysis runs while you&apos;re here, and resumes if you
+        come back to this link later. Bookmark it to find your report again.</>}
       </p>
     </div>
   );

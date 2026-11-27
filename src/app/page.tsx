@@ -75,7 +75,7 @@ const faqs = [
   },
   {
     q: "Is there an API?",
-    a: "It's coming on December 1, 2026, for agencies and tools that want to run Quick Checks and Deep Reports from their own stack, with prepaid credits. It will also come with an MCP server, so AI assistants like Claude or ChatGPT can run checks for you, and it plugs into Zapier or n8n. Join the API list above for early access.",
+    a: "Yes. Agencies and tools can run Quick Checks ($0.15) and Deep Reports ($12, with the site owner's Search Console) from their own stack, with prepaid credits and no subscription. There is also an MCP server, so AI assistants like Claude can run checks for you, and webhooks for Zapier or n8n. Get a key at spamlyze.com/account and see spamlyze.com/docs/api.",
   },
 ];
 
@@ -83,6 +83,7 @@ export default function Home() {
   return (
     <main className="flex-1">
       {deepReportEnabled() && <PromoBanner />}
+      <ApiLaunchBanner />
       <section id="top" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 pt-12 sm:px-6 sm:pt-20">
         <p className="mb-5 inline-flex rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted">
           New: Search Console traffic analysis, free
@@ -266,45 +267,76 @@ function CompareSection() {
   );
 }
 
+/** One line under the header: the API and MCP server are live, without pushing the Quick Check down. */
+function ApiLaunchBanner() {
+  return (
+    <div className="border-b border-line bg-surface">
+      <p className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm sm:px-6">
+        <span>
+          <span className="font-semibold">New:</span> the Spamlyze API and MCP server are live.
+        </span>
+        <span className="flex gap-3">
+          <a href="/docs/api" className="font-semibold text-accent underline underline-offset-4">
+            API docs
+          </a>
+          <a href="/docs/mcp" className="font-semibold text-accent underline underline-offset-4">
+            MCP server
+          </a>
+        </span>
+      </p>
+    </div>
+  );
+}
+
 function ApiTeaser() {
   return (
     <section id="api" className="mx-auto w-full max-w-5xl scroll-mt-8 px-4 pb-20 sm:px-6">
       <div className="grid grid-cols-1 gap-8 rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
         <div className="min-w-0">
           <p className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent">
-            Coming December 1
+            New · Live now
           </p>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">The Spamlyze API</h2>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">The Spamlyze API and MCP server</h2>
           <p className="mt-3 leading-relaxed text-muted">
-            For agencies and SEO tools: run Quick Checks and Deep Reports for your clients from your own stack, and get
-            the results as JSON. Prepaid credits, no subscription.
+            For agencies and SEO tools: run Quick Checks and Deep Reports for your clients from your own stack, and get the
+            results as JSON. Prepaid credits, no subscription: <span className="font-semibold text-foreground">$0.15</span> a
+            Quick Check, <span className="font-semibold text-foreground">$12</span> a Deep Report.
           </p>
           <ul className="mt-4 space-y-2 text-sm">
             <li>
-              <span className="font-semibold">Works with your AI assistant.</span>{" "}
+              <span className="font-semibold">Built on real traffic.</span>{" "}
               <span className="text-muted">
-                An MCP server lets Claude, ChatGPT and other assistants run checks for you, no code needed.
+                Each Deep Report comes with a link your client opens to connect Search Console: the report then shows which
+                pages lost clicks, and after which Google update.
               </span>
             </li>
             <li>
+              <span className="font-semibold">Works with your AI assistant.</span>{" "}
+              <span className="text-muted">Add the MCP server to Claude, Cursor or any MCP client and ask it to check a site.</span>
+            </li>
+            <li>
               <span className="font-semibold">Automate it.</span>{" "}
-              <span className="text-muted">
-                Plug it into your scripts, Zapier or n8n, and check every client site each week without lifting a finger.
-              </span>
+              <span className="text-muted">Webhooks, Zapier, n8n or your own scripts: check every client site without lifting a finger.</span>
             </li>
           </ul>
           <pre className="mt-5 overflow-x-auto rounded-xl border border-line bg-background p-4 text-xs leading-relaxed">
-            <code>{`POST /v1/quick-checks
-{ "url": "https://example.com" }
+            <code>{`POST https://spamlyze.com/v1/reports
+{ "url": "client-site.com", "searchConsole": "wait" }
 
-→ { "riskScore": 34, "riskLevel": "moderate", ... }`}</code>
+→ 202 { "id": "…", "statusUrl": "…",
+        "searchConsole": { "connectUrl": "…" } }`}</code>
           </pre>
         </div>
         <div>
-          <p className="text-sm font-semibold">Get early access</p>
-          <p className="mt-1 text-sm text-muted">One email when the API opens, with the docs and pricing.</p>
-          <div className="mt-4">
-            <WaitlistForm source="api" compact cta="Notify me" />
+          <p className="text-sm font-semibold">Start in two minutes</p>
+          <p className="mt-1 text-sm text-muted">Sign in with Google, add credits and create a key. The docs have curl, JavaScript, Python and MCP examples.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a href="/account" className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white">
+              Get an API key
+            </a>
+            <a href="/docs/api" className="inline-flex items-center justify-center rounded-full border border-line px-5 py-2.5 text-sm font-semibold">
+              Read the docs
+            </a>
           </div>
         </div>
       </div>

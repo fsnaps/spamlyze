@@ -173,6 +173,7 @@ assert.equal(now.status, "running");
 assert.equal(sc(now).connected, false);
 assert.equal(sc(now).connectUrl, `https://spamlyze.com/api/gsc/connect?deep=${now.id}`);
 assert.equal(sc(now).waitUntil, null);
+assert.equal(now.statusUrl, `https://spamlyze.com/v1/reports/${now.id}`, "where to poll");
 await drain();
 assert.equal((await json(await read(now.id))).status, "done");
 assert.equal(hooks.filter((h) => JSON.parse(h.body).type === "report.done").length, 1);

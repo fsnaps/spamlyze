@@ -18,6 +18,7 @@ import { unlockCookie, validUnlockToken } from "@/lib/check/unlock";
 import { benchmarkFor } from "@/lib/check/benchmark";
 import { RiskRank } from "@/components/risk-rank";
 import { HitQuestion } from "@/components/hit-question";
+import { apiEnabled } from "@/lib/api/config";
 
 export const metadata: Metadata = {
   title: "Spam risk report",
@@ -667,6 +668,20 @@ async function Report({
             </>
           }
         />
+      )}
+
+      {apiEnabled() && (
+        <p className="mt-10 text-sm text-muted">
+          Checking many sites, or working with an AI assistant? The same checks are available through the{" "}
+          <a href="/docs/api" className="underline underline-offset-4 hover:text-foreground">
+            Spamlyze API
+          </a>{" "}
+          and the{" "}
+          <a href="/docs/mcp" className="underline underline-offset-4 hover:text-foreground">
+            MCP server
+          </a>
+          .
+        </p>
       )}
 
       <p className="mt-10 text-xs text-muted">

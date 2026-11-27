@@ -95,7 +95,7 @@ async function Account({ searchParams }: { searchParams: PageProps<"/account">["
       {purchase === "canceled" && <p className="mt-4 text-sm text-muted">Payment canceled. Your balance is unchanged.</p>}
       {list.length === 0 ? (
         <p className="mt-8 rounded-2xl border border-line bg-surface p-5">
-          There is no API account for {email} yet. The Spamlyze API opens on December 1, 2026.{" "}
+          There is no API account for {email} yet. The Spamlyze API is not open to new accounts yet.{" "}
           <Link href="/#api" className="text-accent underline">
             Get notified
           </Link>

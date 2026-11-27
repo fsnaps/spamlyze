@@ -3,6 +3,7 @@ import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
+  description: "Terms of use of Spamlyze reports, the API and the MCP server.",
 };
 
 export default function TermsPage() {
@@ -38,6 +39,50 @@ export default function TermsPage() {
           Paid reports are charged in US dollars through Stripe. If a paid report fails to
           generate, we refund it in full.
         </p>
+
+        <h2 id="api">API and MCP server</h2>
+        <p>
+          These terms also apply to the {site.name} API and MCP server (see the{" "}
+          <a href="/docs/api">documentation</a>). In addition:
+        </p>
+        <ul>
+          <li>
+            Your API keys are personal to your account. Keep them secret and revoke a key you think is
+            exposed. You are responsible for every request made with your keys until you revoke them.
+          </li>
+          <li>
+            Requests are paid from a prepaid balance in US dollars, at the prices shown in the
+            documentation and on your account page when you make the request. Reading results is free.
+            A request that fails on our side, or that we cannot analyze, is not charged or is refunded
+            to your balance automatically.
+          </li>
+          <li>
+            Credits are not cash and cannot be transferred. They do not expire while your account is
+            open. If you close your account, write to us within 14 days of a purchase to get the unused
+            part of that purchase refunded; bonus credits are never refunded.
+          </li>
+          <li>
+            If you turn on automatic top-up, you authorize us to charge your saved card for the chosen
+            pack when your balance falls below your threshold, at most twice a day. You can turn it off
+            at any time on your account page.
+          </li>
+          <li>
+            We apply rate limits, a daily spend cap per account and a cooldown per domain. We may pause
+            new paid requests during exceptional load, and we may suspend keys or accounts used for abuse
+            (for example analyzing sites at a volume or pace meant to harm them, or reselling access to
+            the API as such).
+          </li>
+          <li>
+            You may build the results into your own products and reports for your clients. Do not
+            present them as coming from Google, and keep the coverage information of Quick Checks (a
+            Quick Check only looks at a sample of pages).
+          </li>
+          <li>
+            We may change prices or the API with 30 days&apos; notice by email. Changes never apply to
+            credits already used, and you can ask for a refund of unused paid credits if you do not
+            accept a price change.
+          </li>
+        </ul>
 
         <h2>Liability</h2>
         <p>

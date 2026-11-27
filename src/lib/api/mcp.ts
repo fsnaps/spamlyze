@@ -13,7 +13,10 @@ import { createApiReport, getApiReport } from "./reports";
 // rate-limited, budget-capped and logged exactly like /v1. One MCP request = one API request.
 
 export const MCP_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"] as const;
-const SERVER_INFO = { name: "spamlyze", title: "Spamlyze", version: "1.0.0" };
+export const MCP_SERVER_INFO = { name: "spamlyze", title: "Spamlyze", version: "1.0.0" };
+
+/** Methods that describe the server without running anything: allowed without an API key. */
+const DISCOVERY_METHODS = new Set(["initialize", "ping", "tools/list"]);
 
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = { jsonrpc: "2.0"; id?: JsonRpcId; method: string; params?: Record<string, unknown> };
@@ -160,8 +163,13 @@ export async function handleMcpPost(request: Request): Promise<Response> {
     return httpJson(rpcError(null, -32600, "Invalid request: send one JSON-RPC 2.0 message (batches are not supported)."), 400);
   }
 
-  // Every message needs a valid key, so an unauthenticated client learns nothing (not even the tools).
-  const ctx = await authenticate(request);
+  // Without a key, a client (or an MCP directory scanning the server) may still discover it:
+  // initialize, ping, tools/list and notifications describe the public tools, as /docs/mcp does.
+  // Running a tool always needs a valid key. A key that is sent is always checked, so a client
+  // with a wrong or revoked key gets its 401 from the very first message.
+  const hasKey = !!(request.headers.get("authorization") || request.headers.get("x-api-key"));
+  const discovery = msg.id === undefined || DISCOVERY_METHODS.has(msg.method);
+  const ctx = hasKey || !discovery ? await authenticate(request) : null;
   if (ctx instanceof Response) {
     const headers = new Headers(ctx.headers);
     if (ctx.status === 401) headers.set("www-authenticate", `Bearer realm="spamlyze", error="invalid_token"`);
@@ -179,7 +187,7 @@ export async function handleMcpPost(request: Request): Promise<Response> {
         rpcResult(id, {
           protocolVersion: version,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: SERVER_INFO,
+          serverInfo: MCP_SERVER_INFO,
           instructions:
             "Spamlyze checks websites against Google's spam policies. quick_check ($0.15) is a fast estimate on a sample of pages; " +
             "start_deep_report ($12) analyses the whole site with the owner's Search Console data and must be confirmed with the user first. " +
@@ -197,6 +205,7 @@ export async function handleMcpPost(request: Request): Promise<Response> {
       if (typeof name !== "string" || typeof args !== "object" || Array.isArray(args)) {
         return httpJson(rpcError(id, -32602, "Invalid params: name and arguments are required."));
       }
+      if (!ctx) return httpJson(rpcError(id, -32603, "An API key is required."), 401); // unreachable: tools/call is not discovery
       const result = await callTool(ctx, name, args);
       if (!result) return httpJson(rpcError(id, -32602, `Unknown tool: ${name}`));
       await track({ apiMcpToolCalls: 1 });

@@ -1,0 +1,38 @@
+# Publishes server.json (com.spamlyze/mcp) to the official MCP Registry, registry.modelcontextprotocol.io.
+# Run it by hand: GitHub > Actions > "Publish to the MCP Registry" > Run workflow.
+# Needs the repository secret MCP_REGISTRY_PRIVATE_KEY (hex Ed25519 private key). Its public half is
+# served at https://spamlyze.com/.well-known/mcp-registry-auth, so the site must be deployed first.
+# Each run publishes the "version" in server.json: bump it before publishing a change (versions are immutable).
+name: Publish to the MCP Registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --help > /dev/null
+
+      - name: Check the domain proof is live
+        run: |
+          curl -fsS https://spamlyze.com/.well-known/mcp-registry-auth | grep -q "^v=MCPv1; k=ed25519; p="
+
+      - name: Log in with the spamlyze.com domain
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: ./mcp-publisher login http --domain spamlyze.com --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
+
+      - name: Show the listing
+        run: curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=com.spamlyze/mcp"

@@ -111,12 +111,22 @@ const rpc = async (method: string, params?: unknown, k?: string | null) => {
 };
 const call = async (name: string, args: Record<string, unknown> = {}) => (await rpc("tools/call", { name, arguments: args })).body.result!;
 
-// No key, a wrong key, a revoked key: 401 with WWW-Authenticate, and not even the tool list.
-let r = await rpc("tools/list", undefined, null);
+// No key: the server can be discovered (for MCP directories) but no tool runs.
+let r = await rpc("initialize", { protocolVersion: "2025-06-18" }, null);
+assert.equal(r.status, 200);
+assert.equal((r.body.result as { serverInfo: { name: string } }).serverInfo.name, "spamlyze");
+r = await rpc("tools/list", undefined, null);
+assert.equal(r.status, 200);
+assert.equal((r.body.result as { tools: unknown[] }).tools.length, 4);
+assert.equal((await rpc("ping", undefined, null)).status, 200);
+r = await rpc("tools/call", { name: "get_balance", arguments: {} }, null);
 assert.equal(r.status, 401);
 assert.match(r.headers.get("www-authenticate") ?? "", /^Bearer /);
+// A wrong key: 401 with WWW-Authenticate from the very first message, even for discovery.
 r = await rpc("initialize", {}, "spz_live_nope");
 assert.equal(r.status, 401);
+assert.match(r.headers.get("www-authenticate") ?? "", /^Bearer /);
+assert.equal((await rpc("tools/list", undefined, "spz_live_nope")).status, 401);
 
 // GET (SSE stream) and DELETE (sessions) are not offered.
 assert.equal((await mcpRoute.GET()).status, 405);

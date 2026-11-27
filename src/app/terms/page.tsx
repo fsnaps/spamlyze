@@ -58,8 +58,11 @@ export default function TermsPage() {
           </li>
           <li>
             Credits are not cash and cannot be transferred. They do not expire while your account is
-            open. If you close your account, write to us within 14 days of a purchase to get the unused
-            part of that purchase refunded; bonus credits are never refunded.
+            open. Credits are non-refundable, including when you close your account, with two
+            exceptions: if we discontinue the API or close your account (other than for abuse or a
+            breach of these terms), we refund the unused paid balance; and if you buy as a consumer,
+            you keep your legal right to withdraw within 14 days of a purchase for the credits of that
+            purchase you have not used. Bonus credits are never refunded.
           </li>
           <li>
             If you turn on automatic top-up, you authorize us to charge your saved card for the chosen
@@ -78,9 +81,8 @@ export default function TermsPage() {
             Quick Check only looks at a sample of pages).
           </li>
           <li>
-            We may change prices or the API with 30 days&apos; notice by email. Changes never apply to
-            credits already used, and you can ask for a refund of unused paid credits if you do not
-            accept a price change.
+            We may change prices or the API with 30 days&apos; notice by email. New prices apply only to
+            requests made after the change: your balance keeps its value in US dollars.
           </li>
         </ul>
 

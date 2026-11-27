@@ -1,7 +1,7 @@
 import { MCP_SERVER_INFO, MCP_TOOLS } from "@/lib/api/mcp";
 import { site } from "@/lib/site";
 
-// https://spamlyze.com/.well-known/mcp/server-card.json: a static description of the hosted MCP
+// https://spamlyze.com/.well-known/mcp/server-card.json (rewrite in next.config.ts): a static description of the hosted MCP
 // server for directories and scanners that read server cards (same tools as tools/list on /mcp).
 export function GET() {
   return Response.json(

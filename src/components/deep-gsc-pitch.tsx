@@ -5,21 +5,28 @@ import { GSC_MESSAGES } from "@/components/gsc-section";
  * finished report that has no traffic data. Without it the report can only estimate exposure from
  * public pages; with it, it can tell whether the site was actually hit and which pages lost clicks.
  */
-export function DeepGscPitch({ id, stage, result }: { id: string; stage: "running" | "done"; result?: string }) {
+export function DeepGscPitch({ id, stage, result, until }: { id: string; stage: "running" | "done" | "waiting"; result?: string; until?: string }) {
   const message = result && result !== "connected" ? GSC_MESSAGES[result] : null;
-  const running = stage === "running";
+  const running = stage !== "done";
+  const waiting = stage === "waiting";
   return (
     <section
       id="search-console"
       className={`scroll-mt-8 rounded-2xl border-2 border-accent bg-surface p-6 sm:p-8 print:hidden ${running ? "mb-6" : "mt-6"}`}
     >
       {message && <p className="mb-5 rounded-xl border border-line px-4 py-3 text-sm" role="status">{message}</p>}
-      <p className="text-xs font-semibold uppercase tracking-wide text-accent">Strongly recommended</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent">{waiting ? "One step to start" : "Strongly recommended"}</p>
       <h2 className="mt-2 text-xl font-semibold tracking-tight">
-        {running ? "Connect Google Search Console while we work" : "Add your Search Console data to this report"}
+        {waiting
+          ? "Connect Google Search Console to start this report"
+          : running
+            ? "Connect Google Search Console while we work"
+            : "Add your Search Console data to this report"}
       </h2>
       <p className="mt-2 leading-relaxed text-muted">
-        {running
+        {waiting
+          ? `This Deep Report was ordered for your site and starts as soon as Search Console is connected, so it is built on your real traffic: which pages lost clicks, and after which Google update.${until ? ` The link works until ${until}.` : ""}`
+          : running
           ? "This is what turns the report from an estimate into a diagnosis. Public pages show how exposed your site is; only your own traffic shows whether Google actually acted on it."
           : "This report is built on your public pages only, so it estimates your exposure. Connect Search Console and we add your traffic to it: if pages lost clicks, we review them and update your action plan, in a few minutes and at no extra cost."}
       </p>
@@ -56,9 +63,11 @@ export function DeepGscPitch({ id, stage, result }: { id: string; stage: "runnin
         Read-only access (Google&apos;s <span className="font-mono">webmasters.readonly</span> permission): we can&apos;t
         change anything in your account. We import 16 months of clicks for this site once, then revoke the access right
         away and never keep a token.{" "}
-        {running
-          ? "You can skip it: the analysis keeps running, and you can still connect from the finished report."
-          : ""}
+        {waiting
+          ? ""
+          : running
+            ? "You can skip it: the analysis keeps running, and you can still connect from the finished report."
+            : ""}
       </p>
     </section>
   );

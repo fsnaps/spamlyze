@@ -5,10 +5,11 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { recordCheckoutBlock } from "@/lib/deep/blocks";
 import { CrawlError, botChallengeMessage, discoverSite, probeCrawlable } from "@/lib/check/crawl";
 import { FetchBlockedError, normalizeInputUrl } from "@/lib/check/safe-fetch";
-import { getDeepPages, getDeepReport, isDeepId } from "@/lib/deep/job";
+import { expireGscWait, getDeepPages, getDeepReport, isDeepId } from "@/lib/deep/job";
 import { LARGE_TIER_MAX_PAGES as MAX_PAGES } from "@/lib/pricing";
 import { publicStatus } from "@/lib/deep/status";
 import { deepTasksEnabled, enqueueDeepStep } from "@/lib/deep/tasks";
+import { gscEnabled } from "@/lib/gsc/oauth";
 import type { DeepReport } from "@/lib/deep/types";
 import { db } from "@/lib/firebase-admin";
 import { notifyAdmin } from "@/lib/notify";
@@ -26,7 +27,30 @@ const MAX_RUNNING_GLOBAL = () => Number(process.env.API_MAX_RUNNING_REPORTS_GLOB
 /** One API Deep Report per domain per hour, all accounts together: no hammering a third-party site. */
 const DOMAIN_COOLDOWN_MS = () => Number(process.env.API_REPORT_DOMAIN_COOLDOWN_MIN ?? 60) * 60_000;
 
+/** How long a report may wait for the owner to connect Search Console. */
+const GSC_WAIT_HOURS = () => Number(process.env.API_GSC_WAIT_HOURS ?? 72);
+/** Reports one account may have waiting for Search Console at once. */
+const MAX_WAITING_PER_ACCOUNT = () => Number(process.env.API_MAX_WAITING_REPORTS ?? 20);
+
 const reports = () => db().collection("deepReports");
+
+/** The link the site owner opens to connect Search Console to a report (read-only, one-time import). */
+export const searchConsoleConnectUrl = (id: string) => `${site.url}/api/gsc/connect?deep=${id}`;
+
+/** Search Console part of a report: whether it is connected, and the link to connect it. */
+function serializeSearchConsole(id: string, r: DeepReport) {
+  const canConnect = gscEnabled() && !r.gsc && r.status !== "failed" && !r.robotsBlocked;
+  return {
+    connected: Boolean(r.gsc),
+    connectUrl: canConnect ? searchConsoleConnectUrl(id) : null,
+    waitUntil: r.status === "waiting_for_search_console" && r.gscWait ? new Date(r.gscWait.until).toISOString() : null,
+    onTimeout: r.gscWait?.onTimeout ?? null,
+    property: r.gsc?.property ?? null,
+    importedAt: r.gsc?.importedAt ?? null,
+    worstUpdate: r.gsc?.losers?.update ?? null,
+    pagesThatLostClicks: r.gsc ? (r.gsc.lostPages ?? r.gscLosses?.length ?? 0) : null,
+  };
+}
 
 /** Reserves the domain for the cooldown, or returns when it frees up. */
 async function takeDomain(domain: string): Promise<{ ok: true } | { ok: false; until: number }> {
@@ -42,6 +66,11 @@ async function takeDomain(domain: string): Promise<{ ok: true } | { ok: false; u
 
 async function releaseDomain(domain: string) {
   await db().collection("apiDomainLocks").doc(domain.slice(0, 200)).delete().catch(() => undefined);
+}
+
+async function waitingCount(accountId: string): Promise<number> {
+  const q = reports().where("source", "==", "api").where("status", "==", "waiting_for_search_console").where("accountId", "==", accountId);
+  return (await q.count().get()).data().count;
 }
 
 async function runningCount(accountId?: string): Promise<number> {
@@ -69,6 +98,7 @@ export async function serializeReport(id: string, r: DeepReport, withPages: bool
     error: r.robotsBlocked ? "This site's robots.txt does not allow SpamlyzeBot." : r.status === "failed" ? s.error : null,
     refunded: Boolean(r.refunded),
     hitBySpamUpdate: r.hitAnswer ?? null,
+    searchConsole: serializeSearchConsole(id, r),
     reportUrl: `${site.url}/deep/${id}`,
     ...(done
       ? {
@@ -89,7 +119,7 @@ export async function serializeReport(id: string, r: DeepReport, withPages: bool
  */
 export async function createApiReport(
   ctx: ApiContext,
-  body: { url?: unknown; maxPages?: unknown; hitBySpamUpdate?: unknown },
+  body: { url?: unknown; maxPages?: unknown; hitBySpamUpdate?: unknown; searchConsole?: unknown; onSearchConsoleTimeout?: unknown },
 ): Promise<Response> {
   const hit = isHitAnswer(body.hitBySpamUpdate) ? body.hitBySpamUpdate : undefined;
   if (!deepTasksEnabled()) {
@@ -105,9 +135,23 @@ export async function createApiReport(
   if (!Number.isInteger(maxPages) || maxPages < 10 || maxPages > MAX_PAGES) {
     return apiError(400, "invalid_max_pages", `maxPages must be a whole number from 10 to ${MAX_PAGES}.`);
   }
+  if (body.searchConsole != null && body.searchConsole !== "wait") {
+    return apiError(400, "invalid_search_console", 'searchConsole must be "wait" when given.');
+  }
+  const wait = body.searchConsole === "wait";
+  const onTimeout = body.onSearchConsoleTimeout ?? "run";
+  if (onTimeout !== "run" && onTimeout !== "cancel") {
+    return apiError(400, "invalid_search_console", 'onSearchConsoleTimeout must be "run" or "cancel".');
+  }
+  if (wait && !gscEnabled()) {
+    return apiError(503, "unavailable", "Search Console connection is temporarily unavailable. Start the report without searchConsole.");
+  }
 
   if (!(await withinApiBudget())) return budgetExhausted();
   // Capacity before money: nothing is charged for a request we can't run now.
+  if (wait && (await waitingCount(ctx.accountId)) >= MAX_WAITING_PER_ACCOUNT()) {
+    return apiError(429, "too_many_waiting", `At most ${MAX_WAITING_PER_ACCOUNT()} Deep Reports can wait for Search Console at the same time per account.`);
+  }
   if ((await runningCount(ctx.accountId)) >= MAX_RUNNING_PER_ACCOUNT()) {
     return apiError(429, "too_many_running", `At most ${MAX_RUNNING_PER_ACCOUNT()} Deep Reports can run at the same time per account.`, {
       "retry-after": "60",
@@ -157,8 +201,9 @@ export async function createApiReport(
     await reports()
       .doc(id)
       .set({
-        status: "running",
+        status: wait ? "waiting_for_search_console" : "running",
         phase: "discover",
+        ...(wait ? { gscWait: { until: Date.now() + GSC_WAIT_HOURS() * 3_600_000, onTimeout } } : {}),
         inputUrl: url.toString(),
         domain,
         maxPages,
@@ -180,7 +225,8 @@ export async function createApiReport(
 
   await Promise.all([
     hit ? recordHitAnswer({ kind: "deep", id, domain, answer: hit, source: "api", accountId: ctx.accountId }) : null,
-    enqueueDeepStep(id, 0),
+    // A waiting report gets one task at its deadline; connecting Search Console starts it earlier.
+    enqueueDeepStep(id, wait ? GSC_WAIT_HOURS() * 3_600_000 + 1_000 : 0),
     track({ apiDeepReports: 1, apiChargedCents: price }),
     notifyAdmin("deep", `API Deep Report: ${domain}`, [`Account: ${ctx.account.name} (${ctx.accountId})`, `Pages: up to ${maxPages}`], `${site.url}/deep/${id}`),
   ]);
@@ -197,9 +243,14 @@ export async function createApiReport(
 
 /** GET /v1/reports/{id}[?pages=true]: only this account's reports. */
 export async function getApiReport(ctx: ApiContext, id: string, withPages: boolean): Promise<Response> {
-  const report = isDeepId(id) ? await getDeepReport(id) : null;
+  let report = isDeepId(id) ? await getDeepReport(id) : null;
   if (!report || report.accountId !== ctx.accountId) {
     return apiError(404, "not_found", "No Deep Report with this id on your account.");
+  }
+  // Safety net if the deadline task never ran: apply the timeout choice now.
+  if (report.status === "waiting_for_search_console" && (report.gscWait?.until ?? Infinity) <= Date.now() && (await expireGscWait(id))) {
+    report = (await getDeepReport(id))!;
+    if (report.status === "running") await enqueueDeepStep(id, 0);
   }
   return Response.json(await serializeReport(id, report, withPages));
 }

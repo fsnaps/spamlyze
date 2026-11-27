@@ -49,7 +49,7 @@ export const openApiSpec = {
         summary: "Run a Quick Check ($0.15)",
         description:
           "Estimates spam risk from a sample of about 15 pages. Takes 30 to 45 s and answers when done. The same domain within 24 h is served from cache (still charged). " +
-          "Read coverage.scoreScope: on a large site the score only describes the pages checked. Refunded automatically when no analysis comes out.",
+          "Read coverage.scoreScope: on a large site the score only describes the pages checked. Credited back to your balance automatically when no analysis comes out.",
         parameters: [idempotencyKey],
         requestBody: {
           required: true,
@@ -82,10 +82,15 @@ export const openApiSpec = {
     "/reports": {
       post: {
         operationId: "createDeepReport",
-        summary: "Start a Deep Report ($12)",
+        summary: "Start a Deep Report ($12), with the site's Search Console data",
         description:
-          "Judges every page of the site (up to maxPages, max 500) and writes an action plan. Answers 202 at once; the report takes 5 to 30 minutes. " +
-          "Poll GET /reports/{id} or set a webhook. Refunded automatically if it fails. One report per domain per hour.",
+          "Judges every page of the site (up to maxPages, max 500) and writes an action plan. With the owner's Google Search Console, it also uses real clicks: " +
+          "whether each Google update cut traffic, and which pages lost clicks (reviewed first, at the top of the plan). " +
+          "The response has searchConsole.connectUrl: send it to the site owner. " +
+          'With searchConsole "wait", the report starts only once Search Console is connected, for up to 72 h; then it runs without it ("run", default) ' +
+          'or is cancelled and the $12 go back to your balance ("cancel"). Nothing runs, and nothing is spent on analysis, while it waits. ' +
+          "Without it, the report starts at once and connecting later updates it for free (event report.updated). " +
+          "Answers 202 at once; the report takes 5 to 30 minutes once started. Poll GET /reports/{id} or set a webhook. Credited back if it fails. One report per domain per hour.",
         parameters: [idempotencyKey],
         requestBody: {
           required: true,
@@ -93,7 +98,13 @@ export const openApiSpec = {
             "application/json": {
               schema: {
                 type: "object",
-                properties: { url: { type: "string", example: "example.com" }, maxPages: { type: "integer", minimum: 1, maximum: 500, default: 500 }, hitBySpamUpdate: hit },
+                properties: {
+                  url: { type: "string", example: "example.com" },
+                  maxPages: { type: "integer", minimum: 10, maximum: 500, default: 500 },
+                  searchConsole: { type: "string", enum: ["wait"], description: "Wait for the owner to connect Search Console before starting." },
+                  onSearchConsoleTimeout: { type: "string", enum: ["run", "cancel"], default: "run", description: 'With searchConsole "wait": after 72 h without Search Console.' },
+                  hitBySpamUpdate: hit,
+                },
                 required: ["url"],
               },
             },
@@ -101,11 +112,11 @@ export const openApiSpec = {
         },
         responses: {
           "202": { ...json(ref("DeepReport"), "Started. The Location header points at the report."), headers: { Location: { schema: { type: "string" } } } },
-          "400": err("invalid_body, invalid_url, invalid_max_pages or invalid_hit_by_spam_update (not charged)"),
+          "400": err("invalid_body, invalid_url, invalid_max_pages, invalid_search_console or invalid_hit_by_spam_update (not charged)"),
           "402": err("insufficient_credits (not charged)"),
           "409": err("idempotency_in_progress"),
           "422": err("site_unreachable, robots_blocked or bot_challenge (not charged), or idempotency_key_reused"),
-          "429": err("domain_cooldown, too_many_running, rate_limited or daily_cap_reached (not charged)"),
+          "429": err("domain_cooldown, too_many_running, too_many_waiting, rate_limited or daily_cap_reached (not charged)"),
           "401": common["401"],
           "503": common["503"],
         },
@@ -143,7 +154,7 @@ export const openApiSpec = {
       },
       put: {
         operationId: "setWebhook",
-        summary: "Set the URL that receives report.done and report.failed",
+        summary: "Set the URL that receives report events",
         requestBody: {
           required: true,
           content: { "application/json": { schema: { type: "object", properties: { url: { type: "string", format: "uri" } }, required: ["url"] } } },
@@ -160,7 +171,7 @@ export const openApiSpec = {
   webhooks: {
     reportEvent: {
       post: {
-        summary: "report.done or report.failed",
+        summary: "report.done, report.failed or report.updated (Search Console added to a finished report)",
         description:
           "Sent to your webhook URL. Verify the Spamlyze-Signature header (t=<unix>,v1=<hex>): HMAC-SHA256 of `${t}.${rawBody}` with your whsec_ secret. " +
           "Retried up to 6 times over about 9 hours until you answer 2xx. Deduplicate with the event id.",
@@ -243,7 +254,7 @@ export const openApiSpec = {
           object: { type: "string", const: "deep_report" },
           domain: { type: "string" },
           url: { type: "string" },
-          status: { type: "string", enum: ["running", "done", "failed"] },
+          status: { type: "string", enum: ["waiting_for_search_console", "running", "done", "failed"] },
           phase: { type: "string" },
           createdAt: { type: ["string", "null"], format: "date-time" },
           finishedAt: { type: ["string", "null"], format: "date-time" },
@@ -252,6 +263,19 @@ export const openApiSpec = {
           error: { type: ["string", "null"] },
           refunded: { type: "boolean" },
           hitBySpamUpdate: { type: ["string", "null"] },
+          searchConsole: {
+            type: "object",
+            properties: {
+              connected: { type: "boolean" },
+              connectUrl: { type: ["string", "null"], description: "Link for the site owner (read-only Google access, one-time import). Null once connected." },
+              waitUntil: { type: ["string", "null"], format: "date-time" },
+              onTimeout: { type: ["string", "null"], enum: ["run", "cancel", null] },
+              property: { type: ["string", "null"] },
+              importedAt: { type: ["string", "null"] },
+              worstUpdate: { type: ["string", "null"], description: "The Google update after which the site lost the most clicks." },
+              pagesThatLostClicks: { type: ["integer", "null"] },
+            },
+          },
           reportUrl: { type: "string" },
           analysis: { type: ["object", "null"], description: "Risk score, signals and the action plan (status done only)." },
           metrics: { type: ["object", "null"] },
@@ -288,7 +312,7 @@ export const openApiSpec = {
         properties: {
           id: { type: "string", example: "evt_abc_done" },
           object: { type: "string", const: "event" },
-          type: { type: "string", enum: ["report.done", "report.failed"] },
+          type: { type: "string", enum: ["report.done", "report.failed", "report.updated"] },
           createdAt: { type: "string", format: "date-time" },
           data: ref("DeepReport"),
         },

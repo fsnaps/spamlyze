@@ -11,10 +11,10 @@ import { listLedger, spentToday } from "@/lib/api/credits";
 import { listApiKeys } from "@/lib/api/keys";
 import { CREDIT_PACKS, packCreditCents, TOP_UP_THRESHOLDS } from "@/lib/api/packs";
 import { MAX_TOP_UPS_PER_DAY } from "@/lib/api/topup";
-import { fulfillFromRedirect } from "@/lib/api/purchase";
+import { fulfillFromRedirect, syncSavedPaymentMethod } from "@/lib/api/purchase";
 import { site } from "@/lib/site";
 import { revokeKeyAction } from "./actions";
-import { AutoTopUpForm, BuyCreditsForm, NewKeyForm, WebhookForm } from "./forms";
+import { AutoTopUpForm, BuyCreditsForm, NewKeyForm, WebhookForm, CopyButton } from "./forms";
 
 export const metadata: Metadata = { title: "API account", robots: { index: false, follow: false } };
 
@@ -68,6 +68,12 @@ async function Account({ searchParams }: { searchParams: PageProps<"/account">["
         a.balanceCents = (await myAccounts(email)).find((x) => x.id === a.id)?.balanceCents ?? a.balanceCents;
         break;
       }
+    }
+  }
+  // Bought credits but no payment method on file (e.g. paid with Link before we stored it): fetch it from Stripe.
+  for (const a of list) {
+    if (!a.paymentMethod && a.stripeCustomerId && (await syncSavedPaymentMethod(a.id, a.stripeCustomerId))) {
+      a.paymentMethod = (await myAccounts(email)).find((x) => x.id === a.id)?.paymentMethod;
     }
   }
   return (
@@ -153,7 +159,17 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
           {a.paymentMethod ? (
             <>
               <p className="mt-1 text-xs text-muted">
-                Charges your <span className="capitalize">{a.paymentMethod.brand}</span> card ending in {a.paymentMethod.last4}, at most {MAX_TOP_UPS_PER_DAY} times a day. If a payment
+                Charges{" "}
+                {a.paymentMethod.last4 ? (
+                  <>
+                    your <span className="capitalize">{a.paymentMethod.brand}</span> card ending in {a.paymentMethod.last4}
+                  </>
+                ) : (
+                  <>
+                    your saved <span className="capitalize">{a.paymentMethod.brand}</span> payment method
+                  </>
+                )}
+                , at most {MAX_TOP_UPS_PER_DAY} times a day. If a payment
                 fails we turn this off and email you.
               </p>
               {a.topUpState?.lastError && !a.autoTopUp?.enabled && (
@@ -223,13 +239,14 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
 
       <h3 className="mt-8 font-semibold">Webhook</h3>
       <p className="mt-1 text-xs text-muted">
-        We POST <code>report.done</code> and <code>report.failed</code> here when a Deep Report ends, signed with the secret below
+        We POST <code>report.done</code> and <code>report.failed</code> (and <code>report.updated</code> when Search Console is added) here, signed with the secret below
         (header <code>Spamlyze-Signature</code>).
       </p>
       <WebhookForm accountId={a.id} url={a.webhookUrl ?? null} />
       {a.webhookSecret && (
-        <p className="mt-2 text-xs text-muted">
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
           Signing secret: <code className="break-all font-mono">{a.webhookSecret}</code>
+          <CopyButton value={a.webhookSecret} label="Copy signing secret" />
         </p>
       )}
 

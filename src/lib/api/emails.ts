@@ -27,7 +27,7 @@ export function sendTopUpDone(to: string, creditedCents: number, balanceCents: n
     `Spamlyze API: ${usd(creditedCents)} of credits added automatically`,
     layout(
       `${usd(creditedCents)} of credits added`,
-      p(`Your balance fell under your automatic top-up threshold, so we charged your card ending in ${last4}.`) +
+      p(`Your balance fell under your automatic top-up threshold, so we charged ${last4 ? `your card ending in ${last4}` : "your saved payment method"}.`) +
         p(`New balance: ${usd(balanceCents)}. The Stripe receipt follows in a separate email.`),
       accountLink(),
       "See your account",

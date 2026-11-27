@@ -24,20 +24,44 @@ async function stripeCustomer(accountId: string, email: string): Promise<string>
   return c.id;
 }
 
-/** Stores the card of a paid PaymentIntent on the account (brand and last 4 digits only). */
+type StripePm = { id: string; type?: string; card?: { brand: string; last4: string } | null };
+
+/** What we keep of a saved payment method: a card (brand, last 4 digits) or a wallet such as Link. */
+export function describePaymentMethod(pm: StripePm): { id: string; brand: string; last4: string } {
+  if (pm.card) return { id: pm.id, brand: pm.card.brand, last4: pm.card.last4 };
+  return { id: pm.id, brand: pm.type ?? "card", last4: "" };
+}
+
+/** Stores the payment method of a paid PaymentIntent on the account (card brand and last 4 digits, or "link"). */
 export async function saveCard(accountId: string, paymentIntentId: string): Promise<void> {
   try {
     const pi = await purchaseDeps.stripe().paymentIntents.retrieve(paymentIntentId, { expand: ["payment_method"] });
     const pm = pi.payment_method;
-    if (!pm || typeof pm === "string" || !pm.card) return;
+    if (!pm || typeof pm === "string") return;
     await accounts()
       .doc(accountId)
       .update({
-        paymentMethod: { id: pm.id, brand: pm.card.brand, last4: pm.card.last4 },
+        paymentMethod: describePaymentMethod(pm),
         ...(typeof pi.customer === "string" ? { stripeCustomerId: pi.customer } : {}),
       });
   } catch (err) {
     console.error("save card failed", accountId, err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Accounts that bought credits but have no saved payment method on file (for example paid with
+ * Link before we stored it): picks the one Stripe kept for the customer. Called from /account.
+ */
+export async function syncSavedPaymentMethod(accountId: string, customerId: string): Promise<boolean> {
+  try {
+    const { data } = await purchaseDeps.stripe().customers.listPaymentMethods(customerId, { limit: 1 });
+    if (!data[0]) return false;
+    await accounts().doc(accountId).update({ paymentMethod: describePaymentMethod(data[0]) });
+    return true;
+  } catch (err) {
+    console.error("payment method sync failed", accountId, err instanceof Error ? err.message : err);
+    return false;
   }
 }
 

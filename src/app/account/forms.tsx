@@ -58,9 +58,12 @@ export function NewKeyForm({ accountId }: { accountId: string }) {
       {state.key && (
         <div className="mt-3 rounded-xl border border-amber-500/60 bg-amber-500/10 p-3">
           <p className="font-medium">Copy your key now: it won&apos;t be shown again.</p>
-          <code className="mt-2 block break-all rounded bg-surface px-2 py-1 font-mono text-xs" data-testid="new-key">
-            {state.key}
-          </code>
+          <div className="mt-2 flex items-start gap-2">
+            <code className="block min-w-0 flex-1 break-all rounded bg-surface px-2 py-1 font-mono text-xs" data-testid="new-key">
+              {state.key}
+            </code>
+            <CopyButton value={state.key} label="Copy key" />
+          </div>
         </div>
       )}
     </form>
@@ -131,5 +134,39 @@ export function AutoTopUpForm(props: {
       {state.error && <p className="mt-2 text-xs text-red-700 dark:text-red-300">{state.error}</p>}
       {state.saved && !state.error && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">Saved.</p>}
     </form>
+  );
+}
+
+/** Small copy-to-clipboard button with a "Copied" confirmation. */
+export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } catch {
+          setCopied(false);
+        }
+      }}
+      className="inline-flex shrink-0 items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-xs hover:border-foreground/40"
+    >
+      {copied ? (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="11" height="11" rx="2" />
+          <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+        </svg>
+      )}
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }

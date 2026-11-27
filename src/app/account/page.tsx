@@ -14,7 +14,7 @@ import { MAX_TOP_UPS_PER_DAY } from "@/lib/api/topup";
 import { fulfillFromRedirect, syncSavedPaymentMethod } from "@/lib/api/purchase";
 import { site } from "@/lib/site";
 import { revokeKeyAction } from "./actions";
-import { AutoTopUpForm, BuyCreditsForm, NewKeyForm, WebhookForm } from "./forms";
+import { AutoTopUpForm, BuyCreditsForm, NewKeyForm, WebhookForm, CopyButton } from "./forms";
 
 export const metadata: Metadata = { title: "API account", robots: { index: false, follow: false } };
 
@@ -239,13 +239,14 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
 
       <h3 className="mt-8 font-semibold">Webhook</h3>
       <p className="mt-1 text-xs text-muted">
-        We POST <code>report.done</code> and <code>report.failed</code> here when a Deep Report ends, signed with the secret below
+        We POST <code>report.done</code> and <code>report.failed</code> (and <code>report.updated</code> when Search Console is added) here, signed with the secret below
         (header <code>Spamlyze-Signature</code>).
       </p>
       <WebhookForm accountId={a.id} url={a.webhookUrl ?? null} />
       {a.webhookSecret && (
-        <p className="mt-2 text-xs text-muted">
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
           Signing secret: <code className="break-all font-mono">{a.webhookSecret}</code>
+          <CopyButton value={a.webhookSecret} label="Copy signing secret" />
         </p>
       )}
 

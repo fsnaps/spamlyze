@@ -5,7 +5,8 @@ import type { GscData, PageLoss } from "@/lib/gsc/data";
 import type { HitAnswer } from "@/lib/hit-answers";
 
 export type DeepPhase = "discover" | "crawl" | "analyze" | "synthesize" | "done";
-export type DeepStatus = "awaiting_payment" | "running" | "done" | "failed";
+/** waiting_for_search_console: an API report that starts once the owner connects Search Console. */
+export type DeepStatus = "awaiting_payment" | "waiting_for_search_console" | "running" | "done" | "failed";
 
 export type DeepReport = {
   status: DeepStatus;
@@ -21,6 +22,8 @@ export type DeepReport = {
   sitemapUrlCountAtCheckout?: number | null;
   createdAt: FirebaseFirestore.Timestamp;
   paidAt?: FirebaseFirestore.Timestamp;
+  /** When a report that waited for Search Console started. */
+  startedAt?: FirebaseFirestore.Timestamp;
   finishedAt?: FirebaseFirestore.Timestamp;
   email?: string;
   /** Set by the buyer: only browsers with the access cookie (or an admin) can open it. */
@@ -70,6 +73,8 @@ export type DeepReport = {
   gscPending?: boolean;
   /** The losing pages were folded in once. A later refresh only updates the figures. */
   gscMerged?: boolean;
+  /** API option: wait for Search Console until `until` (ms), then run without it or cancel (credits go back to the balance). */
+  gscWait?: { until: number; onTimeout: "run" | "cancel" };
   /** The owner's answer to "Did your traffic drop after a spam update?" (progress page or API). */
   hitAnswer?: HitAnswer;
 };

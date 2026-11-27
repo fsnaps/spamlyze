@@ -49,14 +49,14 @@ async function OpeningBanner() {
 }
 
 const ERRORS: [string, string, string][] = [
-  ["400", "invalid_body, invalid_url, invalid_max_pages, invalid_hit_by_spam_update, invalid_webhook_url, invalid_idempotency_key", "Fix the request. Nothing was charged."],
+  ["400", "invalid_body, invalid_url, invalid_max_pages, invalid_search_console, invalid_hit_by_spam_update, invalid_webhook_url, invalid_idempotency_key", "Fix the request. Nothing was charged."],
   ["401", "missing_api_key, invalid_api_key", "Send a valid key."],
   ["402", "insufficient_credits", "Top up your balance."],
   ["403", "account_suspended", "Contact us."],
   ["404", "not_found", "Unknown id, or an id from another account."],
   ["409", "idempotency_in_progress", "The first request with this key is still running."],
   ["422", "robots_blocked, bot_challenge, site_unreachable, analysis_failed, idempotency_key_reused", "We could not analyze this site. Nothing was charged."],
-  ["429", "rate_limited, daily_cap_reached, too_many_concurrent, too_many_running, domain_cooldown", "Wait for Retry-After."],
+  ["429", "rate_limited, daily_cap_reached, too_many_concurrent, too_many_running, too_many_waiting, domain_cooldown", "Wait for Retry-After."],
   ["503", "api_not_open, budget_exhausted, busy, unavailable", "Retry later (Retry-After when known)."],
 ];
 
@@ -73,6 +73,11 @@ export default function ApiDocsPage() {
         request is paid from a prepaid balance in US dollars: a Quick Check costs $0.15 and a Deep Report $12. Reading results is free,
         and a request that fails is never charged.
       </P>
+      <P>
+        The Deep Report is the one to act on: it reads every page <strong className="text-foreground">and the site&apos;s Google Search Console
+        data</strong>, so it tells you whether Google actually cut the site&apos;s traffic, after which update, and which pages lost
+        clicks. <a href="#search-console" className="text-accent underline">How Search Console works with the API</a>.
+      </P>
       <Suspense>
         <OpeningBanner />
       </Suspense>
@@ -84,6 +89,7 @@ export default function ApiDocsPage() {
             ["choose", "Quick Check or Deep Report?"],
             ["endpoints", "Endpoints"],
             ["reports", "Deep Reports and webhooks"],
+            ["search-console", "Search Console in Deep Reports"],
             ["mcp", "MCP server for AI agents"],
             ["errors", "Errors, limits and retries"],
             ["billing", "Credits and billing"],
@@ -153,8 +159,9 @@ print(check["riskScore"], check["coverage"]["message"])`}</Code>
               ["Price", "$0.15", "$12"],
               ["Pages", "About 15 (a sample)", "Every page, up to 500"],
               ["Time", "30 to 45 s, synchronous", "5 to 30 min, asynchronous"],
-              ["Result", "Estimated risk score, signals, top 3 fixes", "Verdict per page, risk score, prioritised action plan"],
-              ["Best for", "Screening many domains", "Sites you will act on"],
+              ["Search Console", "No", "Yes: real clicks, the updates that hit, the pages that lost traffic"],
+              ["Result", "Estimated risk score, signals, top 3 fixes", "Verdict per page, risk score, action plan tied to real losses"],
+              ["Best for", "Screening many domains", "Diagnosing a site and fixing it"],
             ].map(([k, a, b]) => (
               <tr key={k}>
                 <td className="px-4 py-2 font-medium">{k}</td>
@@ -220,7 +227,7 @@ print(check["riskScore"], check["coverage"]["message"])`}</Code>
       <P>
         <C>POST /v1/reports</C> answers <C>202</C> at once with the report id. The report then runs on our servers, even if your
         connection closes. Either poll <C>GET /v1/reports/&#123;id&#125;</C> (every 30 s is plenty) until <C>status</C> is{" "}
-        <C>done</C> or <C>failed</C>, or set a webhook. A failed report is refunded automatically. The same domain can be reported
+        <C>done</C> or <C>failed</C>, or set a webhook. A failed report is credited back to your balance automatically. The same domain can be reported
         once per hour.
       </P>
       <Code label="curl">{`curl ${BASE}/reports \\
@@ -233,7 +240,7 @@ curl "${BASE}/reports/REPORT_ID?pages=true" \\
   -H "Authorization: Bearer $SPAMLYZE_KEY"`}</Code>
       <P>
         Set a webhook with <C>PUT /v1/webhook</C> <C>&#123;&quot;url&quot;: &quot;https://…&quot;&#125;</C>. You receive{" "}
-        <C>report.done</C> and <C>report.failed</C> events, retried up to 6 times over about 9 hours until you answer 2xx. Check
+        <C>report.done</C>, <C>report.failed</C> and <C>report.updated</C> (Search Console added to a finished report) events, retried up to 6 times over about 9 hours until you answer 2xx. Check
         the <C>Spamlyze-Signature</C> header before trusting a payload, and deduplicate with the event <C>id</C>:
       </P>
       <Code label="Verify a webhook (Node)">{`import { createHmac, timingSafeEqual } from "node:crypto";
@@ -255,11 +262,53 @@ def verify(raw_body: bytes, header: str, secret: str) -> bool:
     expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, parts["v1"])`}</Code>
 
+      <H2 id="search-console">Search Console in Deep Reports</H2>
+      <P>
+        Public pages show how exposed a site is. Only its own traffic shows whether Google acted on it. With the owner&apos;s Search
+        Console, the Deep Report adds 16 months of clicks, the impact of each spam and core update, and the pages that lost clicks:
+        they are crawled and reviewed first, and the action plan starts with them. It is included in the $12.
+      </P>
+      <P>
+        Every Deep Report comes with <C>searchConsole.connectUrl</C>. Send that link to the site owner: they sign in with the Google
+        account that manages the site and allow read-only access. We import the data once, then revoke the access and keep no token.
+        You never handle their Google credentials.
+      </P>
+      <ul className="mt-4 list-disc space-y-2 pl-5 leading-7 text-muted">
+        <li>
+          <strong className="text-foreground">Wait for Search Console (recommended)</strong>: send{" "}
+          <C>&quot;searchConsole&quot;: &quot;wait&quot;</C>. The report has the status <C>waiting_for_search_console</C> and starts as
+          soon as the owner connects, built on their traffic from the start. Nothing is crawled or analyzed while it waits. After 72
+          hours without a connection it runs without Search Console, or, with{" "}
+          <C>&quot;onSearchConsoleTimeout&quot;: &quot;cancel&quot;</C>, it is cancelled and the $12 go back to your balance.
+        </li>
+        <li>
+          <strong className="text-foreground">Start now</strong> (default): the report runs at once from public pages. If the owner
+          connects later, the report is updated for free with their traffic and you receive <C>report.updated</C>.
+        </li>
+      </ul>
+      <Code label="curl">{`curl ${BASE}/reports \\
+  -H "Authorization: Bearer $SPAMLYZE_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url": "client-site.com", "searchConsole": "wait", "onSearchConsoleTimeout": "cancel"}'
+
+# 202 → {
+#   "id": "…", "status": "waiting_for_search_console",
+#   "searchConsole": {
+#     "connected": false,
+#     "connectUrl": "${site.url}/api/gsc/connect?deep=…",
+#     "waitUntil": "…", "onTimeout": "cancel"
+#   }, …
+# }`}</Code>
+      <P>
+        Once connected, <C>searchConsole</C> also gives the property, the update after which the site lost the most clicks (
+        <C>worstUpdate</C>) and how many pages lost clicks (<C>pagesThatLostClicks</C>).
+      </P>
+
       <H2 id="mcp">MCP server for AI agents</H2>
       <P>
         Spamlyze runs a hosted MCP server at <C>{site.url}/mcp</C> (Streamable HTTP). Add it to Claude, Cursor or any MCP client with
         your API key: the agent gets four tools, <C>quick_check</C>, <C>start_deep_report</C>, <C>get_deep_report</C> and{" "}
-        <C>get_balance</C>. They are billed exactly like the API. Agents are told to ask you before starting a paid Deep Report.
+        <C>get_balance</C>. They are billed exactly like the API, and <C>start_deep_report</C> takes the same Search Console options. Agents are told to ask you before starting a paid Deep Report.
       </P>
       <Code label="Claude Code">{`claude mcp add --transport http spamlyze ${site.url}/mcp \\
   --header "Authorization: Bearer $SPAMLYZE_KEY"`}</Code>

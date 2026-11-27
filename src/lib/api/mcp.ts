@@ -49,14 +49,23 @@ export const MCP_TOOLS = [
     title: "Start a Deep Report",
     description:
       "Starts a Deep Report: every page of the site (up to maxPages, default and maximum 500) is judged against Google's spam policies, " +
-      "with a prioritised action plan. Costs $12 from the prepaid balance, refunded automatically if the report fails. " +
-      "Returns at once with an id; the report takes 5 to 30 minutes. Poll it with get_deep_report (no charge). " +
-      "Ask the user before starting one: it is a paid action.",
+      "with a prioritised action plan. It can use the site's Google Search Console data (real clicks before and after each update, " +
+      "pages that lost traffic reviewed first): the response has searchConsole.connectUrl, a link for the site owner to open. " +
+      'With searchConsole "wait", the report only starts once the owner connects Search Console (up to 72 h, then it runs without it, ' +
+      'or with onSearchConsoleTimeout "cancel" the $12 go back to the balance). Without it, the report starts now and the link adds the data later, for free. ' +
+      "Costs $12 from the prepaid balance, credited back if the report fails. Returns at once with an id; the report takes 5 to 30 minutes once started. " +
+      "Poll it with get_deep_report (no charge). Ask the user before starting one: it is a paid action.",
     inputSchema: {
       type: "object",
       properties: {
         url: { type: "string", description: "The site to analyse, e.g. example.com" },
-        maxPages: { type: "integer", minimum: 1, maximum: 500, description: "Optional page limit (default 500)." },
+        maxPages: { type: "integer", minimum: 10, maximum: 500, description: "Optional page limit (default 500)." },
+        searchConsole: { type: "string", enum: ["wait"], description: "Optional: wait for the owner to connect Search Console before starting." },
+        onSearchConsoleTimeout: {
+          type: "string",
+          enum: ["run", "cancel"],
+          description: 'With searchConsole "wait": what happens after 72 h without Search Console. "run" (default) or "cancel" (credits back).',
+        },
         hitBySpamUpdate: hitSchema,
       },
       required: ["url"],
@@ -67,7 +76,9 @@ export const MCP_TOOLS = [
   {
     name: "get_deep_report",
     title: "Get a Deep Report",
-    description: "Progress of a Deep Report, then its results once status is done. Free. Set pages to true for the page-by-page verdicts.",
+    description:
+      "Progress of a Deep Report, then its results once status is done. Free. Set pages to true for the page-by-page verdicts. " +
+      "status waiting_for_search_console means it starts when the owner opens searchConsole.connectUrl.",
     inputSchema: {
       type: "object",
       properties: {
@@ -115,7 +126,15 @@ async function callTool(ctx: ApiContext, name: string, args: Record<string, unkn
     case "quick_check":
       return toolResult(await createApiCheck(ctx, args.url, hit ?? undefined));
     case "start_deep_report":
-      return toolResult(await createApiReport(ctx, { url: args.url, maxPages: args.maxPages, hitBySpamUpdate: hit }));
+      return toolResult(
+        await createApiReport(ctx, {
+          url: args.url,
+          maxPages: args.maxPages,
+          hitBySpamUpdate: hit,
+          searchConsole: args.searchConsole,
+          onSearchConsoleTimeout: args.onSearchConsoleTimeout,
+        }),
+      );
     case "get_deep_report":
       if (typeof args.id !== "string" || !args.id) return badArgs("id is required.");
       return toolResult(await getApiReport(ctx, args.id, args.pages === true));
@@ -162,7 +181,7 @@ export async function handleMcpPost(request: Request): Promise<Response> {
           serverInfo: SERVER_INFO,
           instructions:
             "Spamlyze checks websites against Google's spam policies. quick_check ($0.15) is a fast estimate on a sample of pages; " +
-            "start_deep_report ($12) analyses the whole site and must be confirmed with the user first. " +
+            "start_deep_report ($12) analyses the whole site with the owner's Search Console data and must be confirmed with the user first. " +
             `Prices are taken from the prepaid balance of the API key (top up at ${site.url}/account).`,
         }),
       );

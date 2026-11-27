@@ -6,7 +6,7 @@ import { accounts } from "./accounts";
 // Recording and scheduling webhook events. Kept apart from the delivery code (webhooks.ts) so the
 // Deep Report job can call it without importing the API report serializer (no import cycle).
 
-export type WebhookEventType = "report.done" | "report.failed";
+export type WebhookEventType = "report.done" | "report.failed" | "report.updated";
 
 export type WebhookEventDoc = {
   type: WebhookEventType;

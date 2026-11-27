@@ -149,10 +149,13 @@ export async function attachSearchConsole(id: string, gsc: GscData, losses: Page
     if (!r) return;
     const merge = !r.gscMerged && losses.length > 0 && !r.robotsBlocked;
     const reopen = merge && r.status === "done";
+    // An API report that waited for Search Console starts now, with the losing pages first.
+    const start = r.status === "waiting_for_search_console";
     tx.update(ref, {
       gsc,
       ...(merge ? { gscLosses: losses, gscPending: true } : {}),
       ...(reopen ? { status: "running", failures: 0, leaseUntil: 0 } : {}),
+      ...(start ? { status: "running", phase: "discover", failures: 0, leaseUntil: 0, startedAt: FieldValue.serverTimestamp() } : {}),
     });
   });
   // Running or just reopened: make sure the server keeps it moving even if the page is closed.
@@ -248,8 +251,35 @@ async function acquireLease(id: string): Promise<DeepReport | null> {
   });
 }
 
+export const GSC_TIMEOUT_ERROR = "Search Console was not connected in time.";
+
+/**
+ * An API report waiting for Search Console past its deadline: it runs without it, or is cancelled with its
+ * credits back on the balance, as the customer chose. Returns true when it changed the report.
+ */
+export async function expireGscWait(id: string): Promise<boolean> {
+  const ref = reports().doc(id);
+  const ended = await db().runTransaction(async (tx) => {
+    const r = (await tx.get(ref)).data() as DeepReport | undefined;
+    if (!r || r.status !== "waiting_for_search_console" || !r.gscWait || r.gscWait.until > Date.now()) return null;
+    if (r.gscWait.onTimeout === "run") {
+      tx.update(ref, { status: "running", phase: "discover", failures: 0, leaseUntil: 0, startedAt: FieldValue.serverTimestamp() });
+      return { report: r, run: true };
+    }
+    tx.update(ref, { status: "failed", error: `${GSC_TIMEOUT_ERROR} The report was cancelled and its credits went back to your balance.`, finishedAt: FieldValue.serverTimestamp() });
+    return { report: r, run: false };
+  });
+  if (!ended) return false;
+  if (!ended.run) {
+    await refund(id, ended.report);
+    if (ended.report.accountId) await queueReportEvent(id, ended.report.accountId, "report.failed");
+  }
+  return true;
+}
+
 /** Runs one bounded slice of work (well under a minute). Returns the report afterwards. */
 export async function runStep(id: string): Promise<DeepReport | null> {
+  await expireGscWait(id);
   const report = await acquireLease(id);
   if (!report) return getDeepReport(id);
   const ref = reports().doc(id);
@@ -259,6 +289,10 @@ export async function runStep(id: string): Promise<DeepReport | null> {
     if (patch.robotsBlocked === true && report.accountId) {
       await refund(id, report);
       await queueReportEvent(id, report.accountId, "report.failed");
+    }
+    // API report updated with Search Console data after delivery: tell the integrator once.
+    if (patch.status === "done" && report.finishedAt && report.accountId && report.gsc && !report.rerunAt) {
+      await queueReportEvent(id, report.accountId, "report.updated");
     }
     // A report updated with Search Console data was already delivered once: no second email.
     if (patch.status === "done" && !report.finishedAt && !report.rerunAt) {

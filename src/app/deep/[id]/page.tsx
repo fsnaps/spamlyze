@@ -134,6 +134,17 @@ async function DeepView({
               with this page&apos;s address.
             </p>
           </div>
+        ) : report.status === "waiting_for_search_console" ? (
+          <DeepGscPitch
+            id={id}
+            stage="waiting"
+            result={gscResult}
+            until={
+              report.gscWait
+                ? `${new Date(report.gscWait.until).toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" })} UTC`
+                : undefined
+            }
+          />
         ) : report.status === "done" ? (
           <>
             {privateModeAvailable(report) && (

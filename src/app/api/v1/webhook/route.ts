@@ -2,7 +2,7 @@ import { accounts } from "@/lib/api/accounts";
 import { apiError, authenticate } from "@/lib/api/http";
 import { listWebhookEvents, removeWebhook, setWebhook, validateWebhookUrl, WebhookUrlError } from "@/lib/api/webhooks";
 
-const EVENTS = ["report.done", "report.failed"];
+const EVENTS = ["report.done", "report.failed", "report.updated"];
 
 /** GET /v1/webhook: the webhook URL, its signing secret and the latest deliveries. */
 export async function GET(request: Request) {
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   });
 }
 
-/** PUT /v1/webhook {"url": "https://…"}: sets where report.done and report.failed are sent. */
+/** PUT /v1/webhook {"url": "https://…"}: sets where report events are sent. */
 export async function PUT(request: Request) {
   const ctx = await authenticate(request);
   if (ctx instanceof Response) return ctx;

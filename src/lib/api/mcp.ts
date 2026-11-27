@@ -54,7 +54,8 @@ export const MCP_TOOLS = [
       'With searchConsole "wait", the report only starts once the owner connects Search Console (up to 72 h, then it runs without it, ' +
       'or with onSearchConsoleTimeout "cancel" the $12 go back to the balance). Without it, the report starts now and the link adds the data later, for free. ' +
       "Costs $12 from the prepaid balance, credited back if the report fails. Returns at once with an id; the report takes 5 to 30 minutes once started. " +
-      "Poll it with get_deep_report (no charge). Ask the user before starting one: it is a paid action.",
+      "Then call get_deep_report with the id every minute or so (no charge) until status is done: it returns the full results. " +
+      "Give the user reportUrl to read it as a web page. Ask the user before starting one: it is a paid action.",
     inputSchema: {
       type: "object",
       properties: {

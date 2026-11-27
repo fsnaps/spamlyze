@@ -21,9 +21,14 @@ export async function GET(request: NextRequest) {
   if (!id || (kind !== "d" && kind !== "c")) return NextResponse.redirect(`${site.url}/?gsc=expired`);
 
   const page = kind === "d" ? `/deep/${id}` : `/report/${id}`;
+  // A report ordered through the API: the site owner only connects Search Console. They get a
+  // confirmation page, not the progress page meant for the buyer.
+  const apiReport = kind === "d" && (await getDeepReport(id))?.source === "api";
   const back = async (result: "connected" | "denied" | "no_property" | "error", extra = "") => {
     if (result !== "connected") await Promise.all([noteGsc(kind, id, result), track({ gscFailed: 1 })]);
-    const res = NextResponse.redirect(`${site.url}${page}?gsc=${result}${extra}#search-console`);
+    const res = NextResponse.redirect(
+      apiReport && result === "connected" ? `${site.url}/deep/${id}/connected` : `${site.url}${page}?gsc=${result}${extra}#search-console`,
+    );
     res.cookies.delete({ name: NONCE_COOKIE, path: "/api/gsc" });
     return res;
   };

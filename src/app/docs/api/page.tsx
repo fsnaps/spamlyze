@@ -224,6 +224,22 @@ print(check["riskScore"], check["coverage"]["message"])`}</Code>
 }`}</Code>
 
       <H2 id="reports">Deep Reports and webhooks</H2>
+      <ol className="mt-4 list-decimal space-y-2 pl-5 leading-7 text-muted">
+        <li>
+          <strong className="text-foreground">Create</strong>: <C>POST /v1/reports</C> answers <C>202</C> with the report{" "}
+          <C>id</C>, a <C>statusUrl</C> and <C>searchConsole.connectUrl</C> (send that link to the site owner).
+        </li>
+        <li>
+          <strong className="text-foreground">Wait</strong>: <C>GET</C> the <C>statusUrl</C> (that is{" "}
+          <C>/v1/reports/&#123;id&#125;</C>) every 30 to 60 seconds and watch <C>status</C> and <C>progress</C>, or set a webhook
+          and do nothing until it calls you.
+        </li>
+        <li>
+          <strong className="text-foreground">Read the result</strong>: once <C>status</C> is <C>done</C>, the same <C>GET</C>{" "}
+          returns <C>analysis</C> (risk score, signals, action plan) and <C>metrics</C>; add <C>?pages=true</C> for every
+          page&apos;s verdict. <C>reportUrl</C> is the same report as a web page you can share with your client.
+        </li>
+      </ol>
       <P>
         <C>POST /v1/reports</C> answers <C>202</C> at once with the report id. The report then runs on our servers, even if your
         connection closes. Either poll <C>GET /v1/reports/&#123;id&#125;</C> (every 30 s is plenty) until <C>status</C> is{" "}

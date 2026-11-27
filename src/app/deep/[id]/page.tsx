@@ -155,12 +155,13 @@ async function DeepView({
         ) : (
           <>
             {report.status === "running" && <GscWhileRunning id={id} report={report} result={gscResult} />}
-            {report.status === "running" && (
+            {/* API reports: the integrator already sent its own answers, and the server drives the job. */}
+            {report.status === "running" && report.source !== "api" && (
               <div className="mb-6">
                 <DeepHitQuestion id={id} report={report} />
               </div>
             )}
-            <DeepRunner id={id} host={report.domain} initial={publicStatus(report)} />
+            <DeepRunner id={id} host={report.domain} initial={publicStatus(report)} serverDriven={report.source === "api"} />
           </>
         )}
       </div>

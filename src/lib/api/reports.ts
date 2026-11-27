@@ -99,6 +99,8 @@ export async function serializeReport(id: string, r: DeepReport, withPages: bool
     refunded: Boolean(r.refunded),
     hitBySpamUpdate: r.hitAnswer ?? null,
     searchConsole: serializeSearchConsole(id, r),
+    /** GET this (with your key) for progress, then the results. Free. */
+    statusUrl: `${site.url}/v1/reports/${id}`,
     reportUrl: `${site.url}/deep/${id}`,
     ...(done
       ? {

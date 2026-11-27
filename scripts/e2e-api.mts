@@ -26,7 +26,7 @@ const post = (path: string, body: unknown, headers: Record<string, string> = aut
 const code = async (r: Response) => ((await r.json()) as { error: { code: string } }).error.code;
 
 // Site pages still render (no regression), the docs and the terms included.
-for (const path of ["/", "/check", "/privacy", "/terms", "/legal", "/docs/api", "/sitemap.xml", "/robots.txt"]) {
+for (const path of ["/", "/check", "/privacy", "/terms", "/legal", "/docs/api", "/docs/mcp", "/llms.txt", "/sitemap.xml", "/robots.txt"]) {
   const r = await get(path, {});
   assert.equal(r.status, 200, path);
 }
@@ -74,6 +74,7 @@ r = await mcp({ jsonrpc: "2.0", id: 1, method: "tools/list" }, {});
 assert.equal(r.status, 401);
 assert.ok(r.headers.get("www-authenticate"));
 assert.equal((await get("/mcp")).status, 405);
+assert.equal((await get("/mcp", { accept: "text/html" })).headers.get("location")?.endsWith("/docs/mcp"), true, "browsers land on the MCP docs");
 r = await mcp({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "e2e", version: "1" } } });
 assert.equal(((await r.json()) as { result: { protocolVersion: string } }).result.protocolVersion, "2025-06-18");
 r = await mcp({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_balance", arguments: {} } });

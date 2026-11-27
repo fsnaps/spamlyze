@@ -15,6 +15,22 @@ export const metadata: Metadata = {
 
 const BASE = `${site.url}/v1`;
 
+const API_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "WebAPI",
+  name: "Spamlyze API",
+  description:
+    "REST API that checks websites against Google's spam policies: a Quick Check risk estimate ($0.15) and a Deep Report built on the site's Search Console traffic ($12).",
+  url: `${site.url}/docs/api`,
+  documentation: `${site.url}/openapi.json`,
+  termsOfService: `${site.url}/terms#api`,
+  provider: { "@type": "Organization", name: site.name, url: site.url },
+  offers: [
+    { "@type": "Offer", name: "Quick Check", price: "0.15", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Deep Report", price: "12.00", priceCurrency: "USD" },
+  ],
+};
+
 function Code({ children, label }: { children: string; label?: string }) {
   return (
     <figure className="mt-3">
@@ -43,7 +59,7 @@ async function OpeningBanner() {
   if (apiEnabled()) return null;
   return (
     <p className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-      The API opens on December 1, 2026. You can read the docs and create your account now.
+      The API is not open to new accounts yet. You can read the docs in the meantime.
     </p>
   );
 }
@@ -66,6 +82,7 @@ export default function ApiDocsPage() {
   );
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 sm:px-6">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(API_JSON_LD).replace(/</g, "\\u003c") }} />
       <p className="text-sm font-medium text-accent">Developers</p>
       <h1 className="mt-1 text-4xl font-semibold tracking-tight">Spamlyze API and MCP</h1>
       <P>

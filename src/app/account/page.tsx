@@ -11,7 +11,7 @@ import { listLedger, spentToday } from "@/lib/api/credits";
 import { listApiKeys } from "@/lib/api/keys";
 import { CREDIT_PACKS, packCreditCents, TOP_UP_THRESHOLDS } from "@/lib/api/packs";
 import { MAX_TOP_UPS_PER_DAY } from "@/lib/api/topup";
-import { fulfillFromRedirect } from "@/lib/api/purchase";
+import { fulfillFromRedirect, syncSavedPaymentMethod } from "@/lib/api/purchase";
 import { site } from "@/lib/site";
 import { revokeKeyAction } from "./actions";
 import { AutoTopUpForm, BuyCreditsForm, NewKeyForm, WebhookForm } from "./forms";
@@ -68,6 +68,12 @@ async function Account({ searchParams }: { searchParams: PageProps<"/account">["
         a.balanceCents = (await myAccounts(email)).find((x) => x.id === a.id)?.balanceCents ?? a.balanceCents;
         break;
       }
+    }
+  }
+  // Bought credits but no payment method on file (e.g. paid with Link before we stored it): fetch it from Stripe.
+  for (const a of list) {
+    if (!a.paymentMethod && a.stripeCustomerId && (await syncSavedPaymentMethod(a.id, a.stripeCustomerId))) {
+      a.paymentMethod = (await myAccounts(email)).find((x) => x.id === a.id)?.paymentMethod;
     }
   }
   return (
@@ -153,7 +159,17 @@ async function AccountCard({ account: a }: { account: ApiAccount & { id: string 
           {a.paymentMethod ? (
             <>
               <p className="mt-1 text-xs text-muted">
-                Charges your <span className="capitalize">{a.paymentMethod.brand}</span> card ending in {a.paymentMethod.last4}, at most {MAX_TOP_UPS_PER_DAY} times a day. If a payment
+                Charges{" "}
+                {a.paymentMethod.last4 ? (
+                  <>
+                    your <span className="capitalize">{a.paymentMethod.brand}</span> card ending in {a.paymentMethod.last4}
+                  </>
+                ) : (
+                  <>
+                    your saved <span className="capitalize">{a.paymentMethod.brand}</span> payment method
+                  </>
+                )}
+                , at most {MAX_TOP_UPS_PER_DAY} times a day. If a payment
                 fails we turn this off and email you.
               </p>
               {a.topUpState?.lastError && !a.autoTopUp?.enabled && (

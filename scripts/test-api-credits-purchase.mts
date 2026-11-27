@@ -26,6 +26,7 @@ const intents = new Map<string, { id: string; status: string; customer: string; 
 const fakeStripe = {
   customers: {
     create: async () => ({ id: `cus_${++n}` }),
+    listPaymentMethods: async (customer: string) => ({ data: customer === "cus_link" ? [{ id: "pm_link_1", type: "link", card: null }] : [] }),
   },
   checkout: {
     sessions: {
@@ -202,6 +203,15 @@ assert.equal(charges.length, chargesBefore, "no retry on a declined card");
 const ledger2 = await listLedger(acct, 100);
 assert.equal(ledger2.reduce((s, e) => s + e.cents, 0), await bal());
 assert.equal(ledger2.filter((e) => e.reason === "auto_top_up").length, MAX_TOP_UPS_PER_DAY);
+
+// Paid with Link (no card details): the payment method is still saved, and accounts that missed it
+// get it back from Stripe when they open /account.
+assert.deepEqual(purchase.describePaymentMethod({ id: "pm_link_1", type: "link", card: null }), { id: "pm_link_1", brand: "link", last4: "" });
+const linkAcct = await createApiAccount({ email: "link@example.com", name: "Link" });
+await accounts().doc(linkAcct).update({ stripeCustomerId: "cus_link" });
+assert.equal(await purchase.syncSavedPaymentMethod(linkAcct, "cus_link"), true);
+assert.deepEqual((await accounts().doc(linkAcct).get()).get("paymentMethod"), { id: "pm_link_1", brand: "link", last4: "" });
+assert.equal(await purchase.syncSavedPaymentMethod(linkAcct, "cus_none"), false, "nothing saved at Stripe");
 
 console.log("api credit purchase tests passed");
 process.exit(0);

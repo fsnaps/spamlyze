@@ -44,6 +44,9 @@ export function Footer() {
           <Link href="/legal" className="hover:text-foreground">
             Legal notice
           </Link>
+          <Link href="/docs/api" className="hover:text-foreground">
+            API
+          </Link>
           <Link href="/terms" className="hover:text-foreground">
             Terms
           </Link>

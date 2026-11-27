@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.spamlyze/mcp",
+  "title": "Spamlyze",
+  "description": "Check a website against Google's spam policies: quick risk estimate or full Deep Report.",
+  "version": "1.0.0",
+  "websiteUrl": "https://spamlyze.com/docs/mcp",
+  "icons": [
+    { "src": "https://spamlyze.com/apple-icon.png", "mimeType": "image/png", "sizes": ["180x180"] },
+    { "src": "https://spamlyze.com/icon.svg", "mimeType": "image/svg+xml", "sizes": ["any"] }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://spamlyze.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Your Spamlyze API key (get one at https://spamlyze.com/account), sent as a Bearer token.",
+          "value": "Bearer {api_key}",
+          "isRequired": true,
+          "isSecret": true,
+          "variables": {
+            "api_key": {
+              "description": "Spamlyze API key, starting with spz_live_",
+              "placeholder": "spz_live_...",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
